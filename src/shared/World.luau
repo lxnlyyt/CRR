@@ -1,4 +1,4 @@
--- Builds the static map: sanctuary (safe zone), plots, treadmills, shops and six themed zones.
+-- Builds the static map: sanctuary (safe zone) with seven personal bases, shops and six themed zones.
 local Lighting = game:GetService("Lighting")
 
 local Config = require(script.Parent.Config)
@@ -10,26 +10,21 @@ local P = Style.Part
 local W = {}
 
 W.RootName = "MonsterEggEscape"
-W.Treadmills = {
-	{ Tier = 1, Center = Vector3.new(-20, 0, -14) },
-	{ Tier = 2, Center = Vector3.new(0, 0, -14) },
-	{ Tier = 3, Center = Vector3.new(20, 0, -14) },
-}
-W.TreadmillSize = Vector3.new(10, 1.2, 16)
 W.Boards = {
-	Speed = Vector3.new(-27, 0, -44),
-	Storage = Vector3.new(-9, 0, -44),
-	Power = Vector3.new(9, 0, -44),
-	Info = Vector3.new(27, 0, -44),
+	Info = Vector3.new(-24, 0, -40),
+	Speed = Vector3.new(-8, 0, -40),
+	Storage = Vector3.new(8, 0, -40),
+	Index = Vector3.new(24, 0, -40),
 }
-W.ShopPosition = Vector3.new(-24, 0, 34)
-W.IndexPosition = Vector3.new(24, 0, 34)
-W.PlotColumns = 6
+W.ShopCFrame = CFrame.new(50, 0, 28) * CFrame.Angles(0, math.pi / 2, 0) -- faces the path
+W.FountainPosition = Vector3.new(0, 0, -68)
+W.PenColumns = 4
 
 local WOOD = Color3.fromRGB(158, 104, 60)
 local WOOD_LIGHT = Color3.fromRGB(196, 140, 84)
 local NAVY = Color3.fromRGB(34, 30, 70)
 local SAFE = Color3.fromRGB(80, 255, 170)
+local HEDGE = Color3.fromRGB(70, 175, 80)
 
 local function folder(parent: Instance, name: string): Folder
 	local f = Instance.new("Folder")
@@ -45,19 +40,37 @@ local function noCollide(part: BasePart): BasePart
 	return part
 end
 
--- Plot geometry ---------------------------------------------------------------
+-- Base geometry ---------------------------------------------------------------------
+-- Odd bases line the left wall, even bases the right wall; the right side's last slot holds the shop.
 
-function W.PlotLayout(index: number)
+function W.BaseLayout(index: number): (number, Vector3)
 	local side = if index % 2 == 1 then -1 else 1
 	local row = math.floor((index - 1) / 2)
-	return side, Vector3.new(side * 52, 0, -52 + row * 32)
+	return side, Vector3.new(side * 53, 0, -80 + row * 36)
+end
+
+-- The personal treadmill: belt along Z, the runner faces the zones.
+function W.TreadmillCFrame(index: number): CFrame
+	local side, center = W.BaseLayout(index)
+	return CFrame.new(center.X - side * 8, 0, center.Z - 4)
+end
+
+function W.SpawnPoint(index: number): Vector3
+	local side, center = W.BaseLayout(index)
+	return Vector3.new(center.X - side * 8, 3.5, center.Z + 11)
+end
+
+function W.PenCenter(index: number): Vector3
+	local side, center = W.BaseLayout(index)
+	return Vector3.new(center.X + side * 9, 0, center.Z)
 end
 
 function W.SlotPosition(index: number, slot: number): Vector3
-	local _, center = W.PlotLayout(index)
-	local col = (slot - 1) % W.PlotColumns
-	local row = math.floor((slot - 1) / W.PlotColumns)
-	return center + Vector3.new((col - 2.5) * 4.4, 2.2, (row - 2.5) * 3.9)
+	local side = W.BaseLayout(index)
+	local pen = W.PenCenter(index)
+	local col = (slot - 1) % W.PenColumns
+	local row = math.floor((slot - 1) / W.PenColumns)
+	return pen + Vector3.new(side * (col - 1.5) * 3.9, 2.2, (row - 3.5) * 3.7)
 end
 
 -- Reusable props ----------------------------------------------------------------
@@ -98,121 +111,251 @@ local function fenceLine(parent: Instance, from: Vector3, to: Vector3, height: n
 	end
 end
 
--- Sanctuary -------------------------------------------------------------------------
+local FLOWERS = { Color3.fromRGB(255, 120, 190), Color3.fromRGB(255, 230, 80), Color3.fromRGB(150, 120, 255), Color3.new(1, 1, 1) }
 
-local function buildPlot(parent: Instance, index: number)
-	local side, center = W.PlotLayout(index)
-	local plot = Instance.new("Model")
-	plot.Name = "Plot" .. index
-	plot:SetAttribute("Owner", 0)
-	plot:SetAttribute("Index", index)
-	plot.Parent = parent
-
-	local floor = P(plot, "Floor", Vector3.new(30, 0.6, 26), CFrame.new(center + Vector3.new(0, 0.3, 0)), Color3.fromRGB(118, 204, 92))
-	Style.Studs(floor)
-	local path = P(plot, "Entry", Vector3.new(4, 0.62, 8), CFrame.new(center + Vector3.new(-side * 13, 0.31, 0)), Color3.fromRGB(214, 186, 132))
-	Style.Studs(path)
-
-	local outer, inner = center.X + side * 15, center.X - side * 15
-	local back, front = center.Z - 13, center.Z + 13
-	fenceLine(plot, Vector3.new(outer, 0.6, back), Vector3.new(outer, 0.6, front), 3.2)
-	fenceLine(plot, Vector3.new(inner, 0.6, back), Vector3.new(outer, 0.6, back), 3.2)
-	fenceLine(plot, Vector3.new(inner, 0.6, front), Vector3.new(outer, 0.6, front), 3.2)
-	fenceLine(plot, Vector3.new(inner, 0.6, back), Vector3.new(inner, 0.6, center.Z - 4), 3.2)
-	fenceLine(plot, Vector3.new(inner, 0.6, center.Z + 4), Vector3.new(inner, 0.6, front), 3.2)
-
-	-- Arch over the open entrance with the owner's name.
-	for _, dz in { -4.6, 4.6 } do
-		local pillar = P(plot, "GatePost", Vector3.new(1.4, 9, 1.4), CFrame.new(inner, 4.8, center.Z + dz), WOOD)
-		Style.Studs(pillar)
+local function planter(parent: Instance, cf: CFrame, length: number, rng: Random)
+	local box = P(parent, "Planter", Vector3.new(3, 1.6, length), cf * CFrame.new(0, 0.8, 0), WOOD)
+	Style.Studs(box)
+	P(parent, "Soil", Vector3.new(2.4, 0.3, length - 0.6), cf * CFrame.new(0, 1.65, 0), Color3.fromRGB(96, 64, 44))
+	for n = 1, math.floor(length / 1.6) do
+		local z = -length / 2 + n * 1.6 - 0.6
+		noCollide(P(parent, "Bloom", Vector3.new(0.9, 0.9, 0.9), cf * CFrame.new(rng:NextNumber(-0.6, 0.6), 2.3, z), FLOWERS[rng:NextInteger(1, #FLOWERS)], Enum.Material.SmoothPlastic, Enum.PartType.Ball))
+		noCollide(P(parent, "Leaf", Vector3.new(0.7, 0.5, 0.7), cf * CFrame.new(rng:NextNumber(-0.7, 0.7), 1.95, z + 0.6), HEDGE))
 	end
-	local sign = P(plot, "OwnerSign", Vector3.new(0.8, 2.6, 11), CFrame.new(inner, 9.6, center.Z), WOOD_LIGHT)
-	Style.Studs(sign)
-	for _, face in { Enum.NormalId.Left, Enum.NormalId.Right } do
-		local title = Style.Sign(sign, "EMPTY PLOT", nil, Color3.fromRGB(255, 240, 200), face, 30)
-		title.Name = "Owner"
-	end
-	local label = Style.Label(floor, "Free plot", Color3.fromRGB(220, 255, 220), 14, 2.2, 12)
-	label.Name = "Income"
-	label.MaxDistance = 90
-
-	-- Hay nests mark every possible slot.
-	for slot = 1, Config.MaxCapacity do
-		local at = W.SlotPosition(index, slot)
-		local pad = Style.Cylinder(plot, "Pad", 0.3, 3.2, CFrame.new(at.X, 0.72, at.Z), Color3.fromRGB(226, 196, 120))
-		noCollide(pad)
-	end
-	plot.PrimaryPart = floor
-	return plot
 end
 
-local function buildTreadmill(parent: Instance, info)
-	local tier = Config.Treadmills[info.Tier]
-	local model = Instance.new("Model")
-	model.Name = "Treadmill" .. info.Tier
-	model:SetAttribute("Tier", info.Tier)
-	model.Parent = parent
-	local c = info.Center
-	local base = P(model, "Base", Vector3.new(11, 1, 17), CFrame.new(c + Vector3.new(0, 0.5, 0)), Color3.fromRGB(44, 48, 70))
-	Style.Studs(base)
-	local belt = P(model, "Belt", Vector3.new(8.4, 0.3, 15), CFrame.new(c + Vector3.new(0, 1.12, 0)), Color3.fromRGB(26, 26, 34))
-	for _, face in { Enum.NormalId.Top } do
-		local t = Instance.new("Texture")
-		t.Name = "Stripes"
-		t.Texture = Style.CheckerTexture
-		t.Face = face
-		t.StudsPerTileU = 8.4
-		t.StudsPerTileV = 3
-		t.Color3 = tier.Color
-		t.Transparency = 0.55
-		t.Parent = belt
+local function lamp(parent: Instance, position: Vector3, color: Color3)
+	P(parent, "LampPost", Vector3.new(0.8, 9, 0.8), CFrame.new(position + Vector3.new(0, 4.5, 0)), Color3.fromRGB(50, 52, 80))
+	P(parent, "LampCap", Vector3.new(2.2, 0.4, 2.2), CFrame.new(position + Vector3.new(0, 10.7, 0)), Color3.fromRGB(50, 52, 80))
+	local bulb = P(parent, "Lamp", Vector3.new(1.8, 1.8, 1.8), CFrame.new(position + Vector3.new(0, 9.6, 0)), color, Enum.Material.Neon, Enum.PartType.Ball)
+	Style.Light(bulb, color, 1.2, 16)
+end
+
+-- Personal treadmills -------------------------------------------------------------------
+-- Every level has its own colours; features stack up as the level rises.
+
+function W.BuildTreadmill(base: Model, index: number, level: number): Model
+	local old = base:FindFirstChild("Treadmill")
+	if old then
+		old:Destroy()
 	end
+	local design = Config.TreadmillDesigns[level]
+	local accent, frameColor = design.Accent, design.Frame
+	local cf = W.TreadmillCFrame(index)
+	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z)
+	end
+	local m = Instance.new("Model")
+	m.Name = "Treadmill"
+	m:SetAttribute("Level", level)
+
+	local frame = P(m, "Frame", Vector3.new(11, 1, 17), at(0, 0.5, 0), frameColor)
+	Style.Studs(frame)
+	local belt = P(m, "Belt", Vector3.new(8.4, 0.3, 15), at(0, 1.12, 0), Color3.fromRGB(26, 26, 34))
+	local stripes = Instance.new("Texture")
+	stripes.Name = "Stripes"
+	stripes.Texture = Style.CheckerTexture
+	stripes.Face = Enum.NormalId.Top
+	stripes.StudsPerTileU = 8.4
+	stripes.StudsPerTileV = 3
+	stripes.Color3 = accent
+	stripes.Transparency = math.max(0.15, 0.6 - level * 0.03)
+	stripes.Parent = belt
 	for _, x in { -4.9, 4.9 } do
-		P(model, "Rail", Vector3.new(0.7, 0.6, 17), CFrame.new(c + Vector3.new(x, 1.3, 0)), tier.Color, Enum.Material.Neon)
-		P(model, "Handle", Vector3.new(0.5, 3.6, 0.5), CFrame.new(c + Vector3.new(x, 3, 7.4)), Color3.fromRGB(70, 76, 100), Enum.Material.Metal)
+		P(m, "Rail", Vector3.new(0.7, 0.6, 17), at(x, 1.3, 0), if level >= 4 then accent else Style.Lighten(frameColor, 0.3), if level >= 4 then Enum.Material.Neon else Enum.Material.Metal)
+		P(m, "Handle", Vector3.new(0.5, 3.6, 0.5), at(x, 3, 7.4), Color3.fromRGB(70, 76, 100), Enum.Material.Metal)
 	end
-	P(model, "HandleBar", Vector3.new(10.3, 0.5, 0.5), CFrame.new(c + Vector3.new(0, 4.8, 7.4)), Color3.fromRGB(70, 76, 100), Enum.Material.Metal)
-	local screen = P(model, "Console", Vector3.new(7, 3, 0.6), CFrame.new(c + Vector3.new(0, 6.6, 8.2)) * CFrame.Angles(-0.35, 0, 0), Color3.fromRGB(26, 28, 44))
-	Style.Sign(screen, tier.Name:upper(), "x" .. tier.Power .. " TRAINING", tier.Color, Enum.NormalId.Front, 40)
-	local lock = P(model, "Lock", Vector3.new(9, 6, 15), CFrame.new(c + Vector3.new(0, 4.3, 0)), tier.Color, Enum.Material.ForceField)
-	lock.Transparency = if info.Tier == 1 then 1 else 0.55
-	lock.CanCollide = false
-	lock.CanQuery = false
-	if info.Tier > 1 then
-		local lockLabel = Style.Label(lock, "LOCKED\n$" .. Config.Format(tier.Cost), tier.Color, 8, 3, 1)
-		lockLabel.Name = "LockLabel"
+	P(m, "HandleBar", Vector3.new(10.3, 0.5, 0.5), at(0, 4.8, 7.4), if level >= 6 then accent else Color3.fromRGB(70, 76, 100), if level >= 6 then Enum.Material.Neon else Enum.Material.Metal)
+	local console = P(m, "Console", Vector3.new(7, 3, 0.6), at(0, 6.6, 8.2) * CFrame.Angles(-0.35, 0, 0), Color3.fromRGB(22, 22, 36))
+	P(m, "ConsoleFrame", Vector3.new(7.6, 3.6, 0.4), console.CFrame * CFrame.new(0, 0, 0.35), frameColor)
+	local title, sub = Style.Sign(console, string.format("LV %d • %s", level, design.Name:upper()), "+0 speed", accent, Enum.NormalId.Front, 40)
+	title.Name = "Title"
+	if sub then
+		sub.Name = "Info"
 	end
-	model.PrimaryPart = base
-	return model
+
+	if level >= 3 then
+		for _, x in { -5.6, 5.6 } do
+			for n = 0, 4 do
+				noCollide(P(m, "SideLight", Vector3.new(0.4, 0.5, 1.4), at(x, 0.8, -6 + n * 3), accent, Enum.Material.Neon))
+			end
+		end
+	end
+	if level >= 5 then
+		Style.Particles(belt, "Sparkles", {
+			Color = ColorSequence.new(accent, Color3.new(1, 1, 1)), Rate = 2 + level,
+			Speed = NumberRange.new(1, 3), EmissionDirection = Enum.NormalId.Top,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0) }),
+		})
+	end
+	if level >= 7 then
+		for _, x in { -5.4, 5.4 } do
+			Style.Studs(P(m, "Pylon", Vector3.new(1.2, 6, 1.2), at(x, 3.5, -8), frameColor))
+			local orb = noCollide(P(m, "PylonOrb", Vector3.new(1.8, 1.8, 1.8), at(x, 7.4, -8), accent, Enum.Material.Neon, Enum.PartType.Ball))
+			Style.Light(orb, accent, 1, 12)
+		end
+	end
+	if level >= 9 then
+		for _, x in { -5.8, 5.8 } do
+			Style.Studs(P(m, "ArchPost", Vector3.new(1, 10, 1), at(x, 6, -1), frameColor))
+		end
+		noCollide(P(m, "ArchTop", Vector3.new(12.6, 1, 1.4), at(0, 11.4, -1), accent, Enum.Material.Neon))
+	end
+	if level >= 11 then
+		for _, z in { -5, 3 } do
+			for n = 0, 11 do
+				local angle = n * math.pi / 6
+				noCollide(P(m, "SpeedRing", Vector3.new(0.7, 0.7, 0.4), at(math.cos(angle) * 4.4, 4.6 + math.sin(angle) * 4.4, z) * CFrame.Angles(0, 0, angle), accent, Enum.Material.Neon))
+			end
+		end
+	end
+	if level >= 13 then
+		for _, x in { -5.2, 5.2 } do
+			for _, z in { -8, 8 } do
+				local holder = noCollide(P(m, "FlameHolder", Vector3.new(0.6, 0.6, 0.6), at(x, 1.2, z), accent, Enum.Material.Neon))
+				Style.Particles(holder, "Flames", {
+					Texture = "rbxasset://textures/particles/fire_main.dds", Color = ColorSequence.new(accent, Color3.fromRGB(255, 255, 255)),
+					Rate = 14, Speed = NumberRange.new(2, 4), Acceleration = Vector3.new(0, 6, 0), LightEmission = 1,
+					Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 0) }),
+				})
+			end
+		end
+		Style.Light(frame, accent, 0.8, 14)
+	end
+	if level >= 15 then
+		for _, x in { -1, 1 } do
+			for n = 0, 2 do
+				noCollide(P(m, "Wing", Vector3.new(0.3, 1, 4 - n * 0.9), at(x * (4.6 + n * 0.3), 8 - n * 0.9, 9) * CFrame.Angles(0.5, x * 0.6, x * (0.5 + n * 0.25)), Color3.new(1, 1, 1), Enum.Material.Neon))
+			end
+		end
+		for n = 0, 11 do
+			local angle = n * math.pi / 6
+			noCollide(P(m, "Halo", Vector3.new(0.5, 0.5, 0.5), at(math.cos(angle) * 2.4, 10.2, 8.6 + math.sin(angle) * 1), Color3.fromRGB(255, 230, 120), Enum.Material.Neon, Enum.PartType.Ball))
+		end
+		local beam = noCollide(Style.Cylinder(m, "LightBeam", 40, 3, at(0, 20, -1), accent, Enum.Material.Neon))
+		beam.Transparency = 0.75
+	end
+
+	m.PrimaryPart = frame
+	m.Parent = base
+	return m
+end
+
+-- Sanctuary -------------------------------------------------------------------------
+
+local function buildBase(parent: Instance, index: number)
+	local side, c = W.BaseLayout(index)
+	local color = Config.BaseColors[index]
+	local base = Instance.new("Model")
+	base.Name = "Base" .. index
+	base:SetAttribute("Owner", 0)
+	base:SetAttribute("Index", index)
+	base.Parent = parent
+	local rng = Random.new(300 + index)
+	local function local3(x: number, y: number, z: number): Vector3
+		return Vector3.new(c.X + side * x, y, c.Z + z)
+	end
+
+	local floor = P(base, "Floor", Vector3.new(36, 0.6, 34), CFrame.new(local3(0, 0.3, 0)), Style.Lighten(color, 0.45))
+	Style.Studs(floor)
+	for _, edge in { { 0, -16.8, 36, 0.4 }, { 0, 16.8, 36, 0.4 }, { -17.8, 0, 0.4, 34 }, { 17.8, 0, 0.4, 34 } } do
+		noCollide(P(base, "Trim", Vector3.new(edge[3], 0.2, edge[4]), CFrame.new(local3(edge[1], 0.65, edge[2])), color, Enum.Material.Neon))
+	end
+
+	-- Egg pen.
+	local pen = W.PenCenter(index)
+	local penFloor = P(base, "PenFloor", Vector3.new(16, 0.62, 32), CFrame.new(pen + Vector3.new(0, 0.31, 0)), Color3.fromRGB(226, 196, 120))
+	Style.Studs(penFloor)
+	local inner, outer = c.X + side * 1, c.X + side * 17
+	local back, front = c.Z - 16, c.Z + 16
+	fenceLine(base, Vector3.new(outer, 0.6, back), Vector3.new(outer, 0.6, front), 3.2)
+	fenceLine(base, Vector3.new(inner, 0.6, back), Vector3.new(outer, 0.6, back), 3.2)
+	fenceLine(base, Vector3.new(inner, 0.6, front), Vector3.new(outer, 0.6, front), 3.2)
+	fenceLine(base, Vector3.new(inner, 0.6, back), Vector3.new(inner, 0.6, c.Z - 3.5), 3.2)
+	fenceLine(base, Vector3.new(inner, 0.6, c.Z + 3.5), Vector3.new(inner, 0.6, front), 3.2)
+	for slot = 1, Config.MaxCapacity do
+		local at = W.SlotPosition(index, slot)
+		noCollide(Style.Cylinder(base, "Pad", 0.3, 3.1, CFrame.new(at.X, 0.72, at.Z), Color3.fromRGB(240, 214, 140)))
+	end
+	local income = Style.Label(penFloor, "Free base", Color3.fromRGB(220, 255, 220), 14, 2.2, 10)
+	income.Name = "Income"
+	income.MaxDistance = 90
+
+	-- Entrance arch with the owner's name, facing the path.
+	for _, dz in { 6, 16 } do
+		Style.Studs(P(base, "ArchPost", Vector3.new(1.6, 11, 1.6), CFrame.new(local3(-17.2, 5.5, dz)), color))
+	end
+	local sign = P(base, "OwnerSign", Vector3.new(1, 3, 12), CFrame.new(local3(-17.2, 11.6, 11)), NAVY)
+	Style.Studs(sign)
+	for _, face in { Enum.NormalId.Left, Enum.NormalId.Right } do
+		local title = Style.Sign(sign, "FREE BASE", nil, color, face, 30)
+		title.Name = "Owner"
+	end
+
+	-- Spawn pad.
+	local pad = Style.Cylinder(base, "SpawnPad", 0.4, 7, CFrame.new(W.SpawnPoint(index) - Vector3.new(0, 2.9, 0)), color, Enum.Material.Neon)
+	noCollide(pad).Transparency = 0.3
+	Style.Particles(pad, "Glow", {
+		Color = ColorSequence.new(color), Rate = 3, Speed = NumberRange.new(1, 2), EmissionDirection = Enum.NormalId.Right,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) }),
+	})
+
+	-- Hedge between neighbouring bases, banner on the wall, flowers and a lamp.
+	local hedge = P(base, "Hedge", Vector3.new(36, 3, 1.8), CFrame.new(local3(0, 1.5, -17.6)), HEDGE)
+	Style.Studs(hedge)
+	for n = 0, 7 do
+		noCollide(P(base, "HedgeFlower", Vector3.new(0.8, 0.8, 0.8), CFrame.new(local3(-15 + n * 4.3, 3.1, -17.6)), FLOWERS[n % #FLOWERS + 1], Enum.Material.SmoothPlastic, Enum.PartType.Ball))
+	end
+	local banner = P(base, "Banner", Vector3.new(0.6, 14, 9), CFrame.new(Vector3.new(side * (Config.HalfWidth - 0.4), 22, c.Z)), color)
+	Style.Studs(banner, true)
+	Style.Sign(banner, tostring(index), nil, Color3.new(1, 1, 1), if side < 0 then Enum.NormalId.Right else Enum.NormalId.Left, 20)
+	planter(base, CFrame.new(local3(-15.5, 0.6, -10)), 9, rng)
+	lamp(base, local3(-16.5, 0.6, 2), Style.Lighten(color, 0.4))
+
+	W.BuildTreadmill(base, index, 1)
+	base.PrimaryPart = floor
+	return base
 end
 
 local function buildShop(parent: Instance)
 	local model = Instance.new("Model")
 	model.Name = "TrailShop"
 	model.Parent = parent
-	local c = W.ShopPosition
-	local counter = P(model, "Counter", Vector3.new(14, 3.4, 4), CFrame.new(c + Vector3.new(0, 1.7, -2)), Color3.fromRGB(255, 120, 190))
+	local cf = W.ShopCFrame
+	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z)
+	end
+	local deck = P(model, "Deck", Vector3.new(24, 0.6, 18), at(0, 0.3, 2), Color3.fromRGB(255, 220, 240))
+	Style.Studs(deck)
+	local counter = P(model, "Counter", Vector3.new(14, 3.4, 4), at(0, 1.7, -2), Color3.fromRGB(255, 120, 190))
 	Style.Studs(counter)
-	P(model, "CounterTop", Vector3.new(14.6, 0.5, 4.6), CFrame.new(c + Vector3.new(0, 3.65, -2)), Color3.fromRGB(255, 240, 250))
+	P(model, "CounterTop", Vector3.new(14.6, 0.5, 4.6), at(0, 3.65, -2), Color3.fromRGB(255, 240, 250))
 	for _, x in { -6.8, 6.8 } do
 		for _, z in { -3.8, 3.8 } do
-			P(model, "Pole", Vector3.new(0.8, 11, 0.8), CFrame.new(c + Vector3.new(x, 5.5, z)), Color3.new(1, 1, 1))
+			P(model, "Pole", Vector3.new(0.8, 11, 0.8), at(x, 5.5, z), Color3.new(1, 1, 1))
 		end
 	end
 	for n = 0, 7 do
-		local stripe = P(model, "Awning", Vector3.new(2, 0.8, 10), CFrame.new(c + Vector3.new(-7 + n * 2, 11.4, 0)) * CFrame.Angles(0.12, 0, 0),
+		local stripe = P(model, "Awning", Vector3.new(2, 0.8, 10), at(-7 + n * 2, 11.4, 0) * CFrame.Angles(0.12, 0, 0),
 			if n % 2 == 0 then Color3.fromRGB(255, 90, 170) else Color3.new(1, 1, 1))
 		Style.Studs(stripe)
 	end
-	local sign = P(model, "Sign", Vector3.new(15, 3.4, 0.8), CFrame.new(c + Vector3.new(0, 14, -4.2)), NAVY)
+	local sign = P(model, "Sign", Vector3.new(15, 3.4, 0.8), at(0, 14, -4.2), NAVY)
 	Style.Sign(sign, "TRAIL SHOP", nil, Color3.fromRGB(255, 160, 220), Enum.NormalId.Front, 30)
 	for i, trail in Config.Trails do
-		local orb = P(model, "TrailOrb", Vector3.new(1.4, 1.4, 1.4), CFrame.new(c + Vector3.new(-6.2 + (i - 1) * 2.5, 5, -2)), trail.Colors[1], Enum.Material.Neon, Enum.PartType.Ball)
-		noCollide(orb)
+		local orb = noCollide(P(model, "TrailOrb", Vector3.new(1.4, 1.4, 1.4), at(-6.2 + (i - 1) * 2.5, 5, -2), trail.Colors[1], Enum.Material.Neon, Enum.PartType.Ball))
+		Style.Light(orb, trail.Colors[1], 0.6, 6)
 	end
-	local promptPart = P(model, "PromptPart", Vector3.new(2, 2, 2), CFrame.new(c + Vector3.new(0, 3, -4.6)), Color3.new(1, 1, 1))
+	-- Display mannequin pads with trail ribbons.
+	for i = 1, 3 do
+		local trail = Config.Trails[i * 2]
+		local podium = Style.Cylinder(model, "Podium", 1, 3.4, at(-8 + (i - 1) * 8, 0.8, 8), Color3.fromRGB(255, 240, 250))
+		Style.Studs(podium)
+		local ribbon = noCollide(P(model, "Ribbon", Vector3.new(0.4, 6, 1.6), at(-8 + (i - 1) * 8, 4.3, 8) * CFrame.Angles(0, 0, 0.3), trail.Colors[1], Enum.Material.Neon))
+		ribbon.Transparency = 0.2
+	end
+	local promptPart = noCollide(P(model, "PromptPart", Vector3.new(2, 2, 2), at(0, 3, -4.6), Color3.new(1, 1, 1)))
 	promptPart.Transparency = 1
-	noCollide(promptPart)
 	model.PrimaryPart = counter
 	return model
 end
@@ -221,10 +364,10 @@ local function buildIndex(parent: Instance)
 	local model = Instance.new("Model")
 	model.Name = "EggIndex"
 	model.Parent = parent
-	local c = W.IndexPosition
-	local face = P(model, "Board", Vector3.new(14, 12, 0.8), CFrame.new(c + Vector3.new(0, 8, 0)), NAVY)
-	for _, x in { -7.4, 7.4 } do
-		P(model, "Post", Vector3.new(1, 14, 1), CFrame.new(c + Vector3.new(x, 7, 0)), Color3.fromRGB(80, 70, 140))
+	local c = W.Boards.Index
+	local face = P(model, "Board", Vector3.new(12, 11, 0.8), CFrame.new(c + Vector3.new(0, 7.5, 0)), NAVY)
+	for _, x in { -6.4, 6.4 } do
+		P(model, "Post", Vector3.new(1, 13, 1), CFrame.new(c + Vector3.new(x, 6.5, 0)), Color3.fromRGB(80, 70, 140))
 	end
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
@@ -237,7 +380,7 @@ local function buildIndex(parent: Instance)
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	list.Parent = gui
 	local header = Instance.new("TextLabel")
-	header.Size = UDim2.new(1, 0, 0, 56)
+	header.Size = UDim2.new(1, 0, 0, 50)
 	header.BackgroundTransparency = 1
 	header.Font = Style.Font
 	header.TextScaled = true
@@ -246,7 +389,7 @@ local function buildIndex(parent: Instance)
 	header.Parent = gui
 	for _, rarity in Config.Rarities do
 		local row = Instance.new("TextLabel")
-		row.Size = UDim2.new(0.92, 0, 0, 40)
+		row.Size = UDim2.new(0.92, 0, 0, 36)
 		row.BackgroundTransparency = 1
 		row.Font = Style.Font
 		row.TextScaled = true
@@ -259,11 +402,50 @@ local function buildIndex(parent: Instance)
 		s.Parent = row
 	end
 	local footer = header:Clone()
-	footer.Size = UDim2.new(0.92, 0, 0, 34)
+	footer.Size = UDim2.new(0.92, 0, 0, 30)
 	footer.Text = "Deeper zones = rarer eggs!"
 	footer.TextColor3 = Color3.fromRGB(150, 255, 200)
 	footer.Parent = gui
 	return model
+end
+
+local function buildFountain(parent: Instance)
+	local c = W.FountainPosition
+	local f = Instance.new("Model")
+	f.Name = "Fountain"
+	f.Parent = parent
+	local basin = Style.Cylinder(f, "Basin", 1.8, 20, CFrame.new(c + Vector3.new(0, 0.9, 0)), Color3.fromRGB(240, 244, 255))
+	Style.Studs(basin)
+	local water = noCollide(Style.Cylinder(f, "Water", 0.3, 18, CFrame.new(c + Vector3.new(0, 1.7, 0)), Color3.fromRGB(90, 200, 255), Enum.Material.Glass))
+	water.Transparency = 0.35
+	Style.Cylinder(f, "Pillar", 5, 3.4, CFrame.new(c + Vector3.new(0, 3.6, 0)), Color3.fromRGB(220, 226, 245))
+	local bowl = Style.Cylinder(f, "Bowl", 1, 9, CFrame.new(c + Vector3.new(0, 6.4, 0)), Color3.fromRGB(240, 244, 255))
+	Style.Studs(bowl)
+	local spray = noCollide(Style.Cylinder(f, "Spray", 0.2, 8, CFrame.new(c + Vector3.new(0, 7, 0)), Color3.fromRGB(150, 230, 255), Enum.Material.Neon))
+	spray.Transparency = 0.5
+	Style.Particles(spray, "Splash", {
+		Color = ColorSequence.new(Color3.fromRGB(180, 240, 255)), Rate = 30, Speed = NumberRange.new(6, 9),
+		SpreadAngle = Vector2.new(25, 25), EmissionDirection = Enum.NormalId.Right, Acceleration = Vector3.new(0, -25, 0),
+		Lifetime = NumberRange.new(0.6, 0.9), Size = NumberSequence.new(0.3), LightEmission = 0.4,
+	})
+	local egg = Eggs.Build(6, 7, CFrame.new(c + Vector3.new(0, 11.4, 0)), { Scale = 1.7, Parent = f })
+	egg.Name = "FountainEgg"
+	for _, part in egg:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+		end
+	end
+	for n = 0, 7 do
+		local angle = n * math.pi / 4
+		local seat = Vector3.new(math.cos(angle) * 16, 0, math.sin(angle) * 16)
+		if n % 2 == 0 then
+			planter(f, CFrame.lookAt(c + seat + Vector3.new(0, 0, 0), c) * CFrame.Angles(0, math.pi / 2, 0), 6, Random.new(n))
+		else
+			local bench = P(f, "Bench", Vector3.new(6, 0.6, 2), CFrame.lookAt(c + seat + Vector3.new(0, 1.6, 0), c + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, math.pi / 2, 0), WOOD_LIGHT)
+			Style.Studs(bench)
+			P(f, "BenchLeg", Vector3.new(5, 1.3, 1.2), bench.CFrame * CFrame.new(0, -0.95, 0), WOOD)
+		end
+	end
 end
 
 local function buildSanctuary(root: Instance)
@@ -274,6 +456,9 @@ local function buildSanctuary(root: Instance)
 	Style.Checker(floor, 8, { Enum.NormalId.Top }, 0.86)
 	local path = P(hub, "Path", Vector3.new(22, 0.2, length), CFrame.new(0, 0.1, midZ), Color3.fromRGB(236, 250, 244))
 	Style.Checker(path, 5.5, { Enum.NormalId.Top }, 0.9)
+	for _, x in { -11.4, 11.4 } do
+		Style.Studs(P(hub, "PathEdge", Vector3.new(0.8, 0.5, length), CFrame.new(x, 0.25, midZ), Color3.fromRGB(255, 214, 80)))
+	end
 
 	for _, x in { -1, 1 } do
 		local wall = P(hub, "Wall", Vector3.new(6, Config.WallHeight, length + 6), CFrame.new(x * (Config.HalfWidth + 3), Config.WallHeight / 2, midZ - 3), Color3.fromRGB(110, 196, 236))
@@ -305,7 +490,7 @@ local function buildSanctuary(root: Instance)
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "SanctuarySpawn"
-	spawn.Size = Vector3.new(14, 1, 14)
+	spawn.Size = Vector3.new(12, 1, 12)
 	spawn.CFrame = CFrame.new(Config.SpawnPosition) * CFrame.Angles(0, math.pi, 0) -- face the zones
 	spawn.Anchored = true
 	spawn.Neutral = true
@@ -314,8 +499,7 @@ local function buildSanctuary(root: Instance)
 	spawn.Material = Enum.Material.Plastic
 	spawn.TopSurface = Enum.SurfaceType.Studs
 	spawn.Parent = hub
-	local ring = Style.Cylinder(hub, "SpawnRing", 0.3, 17, CFrame.new(Config.SpawnPosition - Vector3.new(0, 0.4, 0)), Color3.fromRGB(255, 120, 200), Enum.Material.Neon)
-	noCollide(ring)
+	noCollide(Style.Cylinder(hub, "SpawnRing", 0.3, 15, CFrame.new(Config.SpawnPosition - Vector3.new(0, 0.4, 0)), Color3.fromRGB(255, 120, 200), Enum.Material.Neon))
 
 	-- Safe zone gate.
 	local line = P(hub, "SafeLine", Vector3.new(Config.HalfWidth * 2, 0.3, 1.6), CFrame.new(0, 0.15, Config.SafeZ), SAFE, Enum.Material.Neon)
@@ -327,39 +511,36 @@ local function buildSanctuary(root: Instance)
 		local pillar = P(hub, "GatePillar", Vector3.new(6, 28, 6), CFrame.new(x, 14, Config.SafeZ), Color3.fromRGB(255, 255, 255))
 		Style.Studs(pillar, true)
 		P(hub, "GateCap", Vector3.new(7, 2, 7), CFrame.new(x, 29, Config.SafeZ), SAFE, Enum.Material.Neon)
+		local orb = noCollide(P(hub, "GateOrb", Vector3.new(3, 3, 3), CFrame.new(x, 31.6, Config.SafeZ), SAFE, Enum.Material.Neon, Enum.PartType.Ball))
+		Style.Light(orb, SAFE, 2, 24)
 	end
 	local beam = P(hub, "GateBeam", Vector3.new(50, 7, 5), CFrame.new(0, 32, Config.SafeZ), Color3.fromRGB(40, 150, 110))
 	Style.Studs(beam)
 	Style.Sign(beam, "SAFE ZONE", "Monsters can't enter • Eggs are banked", Color3.fromRGB(180, 255, 220), Enum.NormalId.Front, 20)
 	Style.Sign(beam, "SAFE ZONE", "Run back here with your egg!", Color3.fromRGB(180, 255, 220), Enum.NormalId.Back, 20)
 
-	local plots = folder(hub, "Plots")
+	local bases = folder(hub, "Bases")
 	for index = 1, Config.MaxPlayers do
-		buildPlot(plots, index)
-	end
-	local treadmills = folder(hub, "Treadmills")
-	for _, info in W.Treadmills do
-		buildTreadmill(treadmills, info)
-		if info.Tier > 1 then
-			local tier = Config.Treadmills[info.Tier]
-			board(treadmills, "UnlockBoard" .. info.Tier, info.Center + Vector3.new(0, 0, -12.5), tier.Color, "UNLOCK " .. tier.Name:upper(), "$" .. Config.Format(tier.Cost))
-		end
+		buildBase(bases, index)
+		task.wait()
 	end
 	local boards = folder(hub, "Boards")
 	board(boards, "SpeedBoard", W.Boards.Speed, Color3.fromRGB(46, 160, 230), "SPEED +", "Loading...")
 	board(boards, "StorageBoard", W.Boards.Storage, Color3.fromRGB(140, 90, 220), "STORAGE +4", "Loading...")
-	board(boards, "PowerBoard", W.Boards.Power, Color3.fromRGB(255, 150, 40), "TREADMILL POWER", "Loading...")
 	board(boards, "InfoBoard", W.Boards.Info, Color3.fromRGB(60, 190, 120), "HOW TO PLAY", "Steal eggs • Run back here")
-	buildShop(hub)
 	buildIndex(hub)
+	buildShop(hub)
+	buildFountain(hub)
 
-	-- Lamps and planters for life.
-	for _, x in { -13, 13 } do
-		for n = 0, 3 do
-			local z = -30 + n * 30
-			P(hub, "LampPost", Vector3.new(0.8, 9, 0.8), CFrame.new(x, 4.5, z), Color3.fromRGB(50, 52, 80))
-			local lamp = P(hub, "Lamp", Vector3.new(1.8, 1.8, 1.8), CFrame.new(x, 9.6, z), Color3.fromRGB(255, 240, 180), Enum.Material.Neon, Enum.PartType.Ball)
-			Style.Light(lamp, Color3.fromRGB(255, 230, 170), 1.2, 16)
+	-- Lamps and planters along the path.
+	local rng = Random.new(5)
+	for _, x in { -14, 14 } do
+		for n = 0, 4 do
+			local z = -88 + n * 40
+			lamp(hub, Vector3.new(x, 0, z), Color3.fromRGB(255, 236, 170))
+			if n > 0 and n < 4 then
+				planter(hub, CFrame.new(x, 0, z + 18), 10, rng)
+			end
 		end
 	end
 	return hub
@@ -647,6 +828,110 @@ end
 
 local DECOR = { forest, desert, ice, lava, toxic, shadow }
 
+-- Ambient particles per zone: falling leaves, drifting sand, snow, rising embers, bubbles, motes.
+local AMBIENT = {
+	{ Falling = true, Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = Color3.fromRGB(140, 230, 90), Rate = 18, Speed = NumberRange.new(2, 4), Size = 0.6 },
+	{ Falling = true, Texture = "rbxasset://textures/particles/smoke_main.dds", Color = Color3.fromRGB(245, 215, 150), Rate = 10, Speed = NumberRange.new(3, 6), Size = 5 },
+	{ Falling = true, Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = Color3.fromRGB(255, 255, 255), Rate = 60, Speed = NumberRange.new(3, 5), Size = 0.5 },
+	{ Falling = false, Texture = "rbxasset://textures/particles/fire_sparks_main.dds", Color = Color3.fromRGB(255, 150, 50), Rate = 30, Speed = NumberRange.new(3, 7), Size = 0.5 },
+	{ Falling = false, Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = Color3.fromRGB(150, 255, 60), Rate = 16, Speed = NumberRange.new(2, 4), Size = 0.8 },
+	{ Falling = false, Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = Color3.fromRGB(190, 110, 255), Rate = 22, Speed = NumberRange.new(0.5, 1.5), Size = 0.7 },
+}
+
+local function wallDetail(f: Instance, index: number, side: number, z: number, n: number)
+	local x = side * (Config.HalfWidth - 0.6)
+	local inward = -side
+	local zone = Config.Zones[index]
+	if index == 1 then
+		for k = 0, 2 do
+			local length = 18 + (k * 7 + n * 5) % 20
+			local vineX = x + inward * 0.3
+			noCollide(P(f, "Vine", Vector3.new(0.4, length, 0.8), CFrame.new(vineX, Config.WallHeight - length / 2, z + (k - 1) * 3), Color3.fromRGB(60, 150, 60)))
+			for leaf = 1, 3 do
+				noCollide(Style.Studs(P(f, "VineLeaf", Vector3.new(1.4, 1.2, 1.6), CFrame.new(vineX + inward * 0.5, Config.WallHeight - length * leaf / 3.2, z + (k - 1) * 3 + 0.6), Color3.fromRGB(100, 210, 80))))
+			end
+		end
+	elseif index == 2 then
+		local panel = P(f, "Hieroglyphs", Vector3.new(0.6, 12, 9), CFrame.new(x, 12, z), Color3.fromRGB(200, 150, 90))
+		Style.Studs(panel, true)
+		for k = 0, 5 do
+			noCollide(P(f, "Glyph", Vector3.new(0.3, 1.4, 1.4), CFrame.new(x + inward * 0.4, 8 + (k % 3) * 3, z - 2.2 + math.floor(k / 3) * 4.4) * CFrame.Angles((k % 2) * 0.785, 0, 0), Color3.fromRGB(110, 70, 40)))
+		end
+		noCollide(P(f, "GlyphEye", Vector3.new(0.3, 1.6, 3.2), CFrame.new(x + inward * 0.45, 16.4, z), Color3.fromRGB(40, 140, 170), Enum.Material.Neon))
+	elseif index == 3 then
+		for k = 0, 4 do
+			local length = 3 + (k * 3 + n) % 6
+			local icicle = noCollide(Style.Wedge(f, "Icicle", Vector3.new(1.2, length, 1.2), CFrame.new(x + inward * 0.6, Config.WallHeight - length / 2, z - 4 + k * 2) * CFrame.Angles(math.pi, 0, 0), Color3.fromRGB(190, 240, 255), Enum.Material.Glass))
+			icicle.Transparency = 0.2
+		end
+		local frost = noCollide(P(f, "Frost", Vector3.new(0.3, 9, 12), CFrame.new(x + inward * 0.1, 6, z), Color3.fromRGB(235, 250, 255), Enum.Material.Snow))
+		frost.Transparency = 0.1
+	elseif index == 4 then
+		if n % 2 == 0 then
+			local fall = noCollide(P(f, "Lavafall", Vector3.new(0.5, Config.WallHeight, 4), CFrame.new(x + inward * 0.2, Config.WallHeight / 2, z), zone.Color, Enum.Material.Neon))
+			fall.Transparency = 0.05
+			local pool = noCollide(Style.Cylinder(f, "LavaPool", 0.4, 8, CFrame.new(x + inward * 4, 0.2, z), zone.Accent, Enum.Material.Neon))
+			Style.Particles(pool, "Steam", {
+				Texture = "rbxasset://textures/particles/fire_main.dds", Color = ColorSequence.new(zone.Accent, zone.Color),
+				Rate = 10, Speed = NumberRange.new(2, 4), EmissionDirection = Enum.NormalId.Right, LightEmission = 1,
+				Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.5), NumberSequenceKeypoint.new(1, 0) }),
+			})
+			Style.Light(pool, zone.Color, 2, 18)
+		else
+			Style.Studs(P(f, "Brazier", Vector3.new(2.4, 4, 2.4), CFrame.new(x + inward * 2, 2, z), Color3.fromRGB(60, 40, 44)))
+		end
+	elseif index == 5 then
+		for k = 0, 4 do
+			noCollide(P(f, "HazardStripe", Vector3.new(0.4, 6, 1.6), CFrame.new(x + inward * 0.3, 9, z - 3.2 + k * 1.6) * CFrame.Angles(0.5, 0, 0), if k % 2 == 0 then Color3.fromRGB(252, 204, 40) else Color3.fromRGB(30, 30, 36)))
+		end
+		local valve = P(f, "Valve", Vector3.new(1.2, 3, 3), CFrame.new(x + inward * 0.8, 15, z), Color3.fromRGB(200, 40, 40))
+		valve.Shape = Enum.PartType.Cylinder
+		local glow = noCollide(P(f, "PipeLight", Vector3.new(0.4, 0.8, 6), CFrame.new(x + inward * 0.3, 18, z), Color3.fromRGB(110, 240, 40), Enum.Material.Neon))
+		Style.Light(glow, Color3.fromRGB(110, 240, 40), 1, 12)
+	else
+		for k = 0, 2 do
+			noCollide(P(f, "WallCrystal", Vector3.new(1.4, 5 - k, 1.4), CFrame.new(x + inward * 0.9, 14 + k * 2, z + (k - 1) * 2) * CFrame.Angles(0.4 * (k - 1), 0, side * 0.6), zone.Color, Enum.Material.Neon))
+		end
+		Style.Studs(P(f, "Torch", Vector3.new(0.8, 4, 0.8), CFrame.new(x + inward * 1, 7, z + 5), Color3.fromRGB(40, 30, 44)))
+		local flame = noCollide(P(f, "TorchFlame", Vector3.new(1, 1, 1), CFrame.new(x + inward * 1, 9.4, z + 5), zone.Accent, Enum.Material.Neon))
+		Style.Particles(flame, "Fire", {
+			Texture = "rbxasset://textures/particles/fire_main.dds", Color = ColorSequence.new(zone.Accent, zone.Color),
+			Rate = 12, Speed = NumberRange.new(1, 2), Acceleration = Vector3.new(0, 4, 0), LightEmission = 1,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0) }),
+		})
+		Style.Light(flame, zone.Accent, 1.5, 14)
+	end
+end
+
+local function zoneDetails(f: Instance, index: number, start: number)
+	local zone = Config.Zones[index]
+	local mid = start + Config.ZoneLength / 2
+	for _, x in { -11.4, 11.4 } do
+		Style.Studs(P(f, "PathEdge", Vector3.new(0.8, 0.5, Config.ZoneLength), CFrame.new(x, 0.25, mid), Style.Lighten(zone.Trim, 0.15)))
+	end
+	for _, side in { -1, 1 } do
+		for n = 0, 5 do
+			wallDetail(f, index, side, start + 18 + n * 29 + (if side > 0 then 12 else 0), n)
+		end
+	end
+	local ambient = AMBIENT[index]
+	local sheet = noCollide(P(f, "Ambient", Vector3.new(Config.HalfWidth * 2 - 6, 1, Config.ZoneLength - 6), CFrame.new(0, if ambient.Falling then 46 else 0.5, mid), Color3.new(1, 1, 1)))
+	sheet.Transparency = 1
+	Style.Particles(sheet, "Ambient", {
+		Texture = ambient.Texture,
+		Color = ColorSequence.new(ambient.Color),
+		Rate = ambient.Rate,
+		Speed = ambient.Speed,
+		EmissionDirection = if ambient.Falling then Enum.NormalId.Bottom else Enum.NormalId.Top,
+		Lifetime = NumberRange.new(if ambient.Falling then 10 else 3, if ambient.Falling then 14 else 6),
+		SpreadAngle = Vector2.new(20, 20),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, ambient.Size), NumberSequenceKeypoint.new(1, ambient.Size * 0.6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.8, 0.4), NumberSequenceKeypoint.new(1, 1) }),
+		LightEmission = if index >= 4 then 1 else 0.3,
+		RotSpeed = NumberRange.new(-60, 60),
+	})
+end
+
 local function buildNest(f: Instance, index: number)
 	local zone = Config.Zones[index]
 	local center = Config.NestCenter(index)
@@ -713,6 +998,7 @@ local function buildZone(root: Instance, index: number)
 	local decor = folder(f, "Decor")
 	DECOR[index](decor, Random.new(index * 97), start)
 	keepClear = {}
+	zoneDetails(decor, index, start)
 	buildNest(f, index)
 	task.wait()
 	return f

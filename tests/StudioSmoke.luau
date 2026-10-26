@@ -7,7 +7,7 @@ local qa = assert(game.ServerStorage:WaitForChild("MonsterEggStudioQA", 10), "Wa
 local Config = require(game.ReplicatedStorage.MonsterEgg.Config)
 local world = workspace.MonsterEggEscape
 local runtime = world.Runtime
-while not player:GetAttribute("Plot") do
+while not player:GetAttribute("Base") do
 	task.wait(0.2)
 end
 
@@ -46,8 +46,19 @@ check("Six guardians spawned", #runtime.Monsters:GetChildren() == #Config.Zones)
 check("Eighteen nest eggs", waitFor(Config.NestRespawn + 1, function()
 	return #runtime.NestEggs:GetChildren() == #Config.Zones * Config.NestSlots
 end))
-check("Eight fenced plots", #world.Sanctuary.Plots:GetChildren() == Config.MaxPlayers)
-check("Player owns a plot", player:GetAttribute("Plot") ~= nil)
+local World = require(game.ReplicatedStorage.MonsterEgg.World)
+local baseIndex = player:GetAttribute("Base")
+check("Seven personal bases", #world.Sanctuary.Bases:GetChildren() == Config.MaxPlayers and Config.MaxPlayers == 7)
+check("Player owns a base", baseIndex ~= nil and world.Sanctuary.Bases["Base" .. baseIndex]:GetAttribute("Owner") == player.UserId)
+check("Every base has its own treadmill", (function()
+	for _, base in world.Sanctuary.Bases:GetChildren() do
+		if not base:FindFirstChild("Treadmill") then
+			return false
+		end
+	end
+	return true
+end)())
+check("Spawned at own base", (character().HumanoidRootPart.Position - World.SpawnPoint(baseIndex)).Magnitude < 10)
 for zone = 1, #Config.Zones do
 	local name = Config.Zones[zone].Monster
 	local model = runtime.Monsters:FindFirstChild(name)
@@ -89,7 +100,7 @@ check("All guardians return to sleep", waitFor(20, function()
 	end
 	return true
 end))
-check("Banked eggs shown in plot", #qa:Invoke("Snapshot", player).Plot.Eggs:GetChildren() == player:GetAttribute("EggCount"))
+check("Banked eggs shown in base pen", #qa:Invoke("Snapshot", player).Base.Eggs:GetChildren() == player:GetAttribute("EggCount"))
 check("Banked eggs give income", (player:GetAttribute("Income") or 0) > 0)
 
 -- Getting caught ---------------------------------------------------------------------------
@@ -104,27 +115,38 @@ task.wait(1.5) -- let the client-side knockback finish
 teleport(SAFE)
 
 -- Treadmills, upgrades and trails ------------------------------------------------------------
+local function standOnTreadmill(index: number)
+	teleport((World.TreadmillCFrame(index) * CFrame.new(0, 4, 0)).Position)
+end
 local training = player:GetAttribute("Training")
-teleport(Vector3.new(-20, 4, -14))
+standOnTreadmill(baseIndex)
 task.wait(2.2)
-check("Basic treadmill trains", player:GetAttribute("Training") > training)
+check("Own treadmill trains and pays", player:GetAttribute("Training") > training)
 training = player:GetAttribute("Training")
-teleport(Vector3.new(0, 4, -14))
+standOnTreadmill(if baseIndex == 1 then 2 else 1)
 task.wait(2.2)
-check("Locked treadmill does nothing", player:GetAttribute("Training") == training)
-qa:Invoke("GrantCash", player, 2e6)
-check("Unlock Turbo treadmill", qa:Invoke("Unlock", player, 2) == true)
-task.wait(2.2)
-check("Turbo treadmill trains faster", player:GetAttribute("Training") >= training + 3)
+check("Someone else's treadmill does nothing", player:GetAttribute("Training") == training)
 teleport(SAFE)
 
-local speed, capacity, power = player:GetAttribute("SpeedLevel"), player:GetAttribute("Capacity"), player:GetAttribute("TreadLevel")
+qa:Invoke("GrantCash", player, 1e7)
+local walkBefore = player:GetAttribute("WalkSpeed")
+check("Upgrade treadmill to level 2", qa:Invoke("UpgradeTreadmill", player) == 2)
+check("Treadmill upgrade adds walk speed", math.abs(player:GetAttribute("WalkSpeed") - walkBefore - Config.TreadSpeedPerLevel) < 0.01)
+local myBase = world.Sanctuary.Bases["Base" .. baseIndex]
+check("Treadmill rebuilt with level 2 design", myBase.Treadmill:GetAttribute("Level") == 2)
+for _ = 3, Config.MaxTreadLevel do
+	qa:Invoke("UpgradeTreadmill", player)
+end
+check("Treadmill reaches level 15", player:GetAttribute("TreadLevel") == Config.MaxTreadLevel)
+check("Level 15 design has its divine beam", myBase.Treadmill:FindFirstChild("LightBeam") ~= nil)
+check("Treadmill can't pass level 15", qa:Invoke("UpgradeTreadmill", player) == Config.MaxTreadLevel)
+check("Max treadmill gives +16.8 speed", math.abs(player:GetAttribute("WalkSpeed") - walkBefore - 14 * Config.TreadSpeedPerLevel) < 0.01)
+
+local speed, capacity = player:GetAttribute("SpeedLevel"), player:GetAttribute("Capacity")
 qa:Invoke("Purchase", player, "Speed")
 qa:Invoke("Purchase", player, "Storage")
-qa:Invoke("Purchase", player, "Power")
 check("Speed upgrade", player:GetAttribute("SpeedLevel") == speed + 1)
 check("Storage upgrade", player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
-check("Treadmill power upgrade", player:GetAttribute("TreadLevel") == power + 1)
 
 local walk = character().Humanoid.WalkSpeed
 check("Buy Mint trail", (qa:Invoke("Shop", player, { Action = "Buy", Index = 1 })))
@@ -138,8 +160,7 @@ check("Cannot buy twice", not (qa:Invoke("Shop", player, { Action = "Buy", Index
 
 -- Selling and storage limits -------------------------------------------------------------------
 local count, cash = player:GetAttribute("EggCount"), player:GetAttribute("Cash")
-local World = require(game.ReplicatedStorage.MonsterEgg.World)
-local slotOne = World.SlotPosition(player:GetAttribute("Plot"), 1)
+local slotOne = World.SlotPosition(baseIndex, 1)
 teleport(slotOne + Vector3.new(0, 2, -3))
 qa:Invoke("Sell", player, 1)
 check("Sell banked egg", player:GetAttribute("EggCount") == count - 1 and player:GetAttribute("Cash") > cash)
@@ -161,7 +182,9 @@ task.wait(0.3)
 check("Death drops carried egg", player:GetAttribute("Carrying") == "")
 player.CharacterAdded:Wait()
 task.wait(0.5)
-check("Respawn keeps progress", player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
+check("Respawn keeps progress", player:GetAttribute("Capacity") == capacity + Config.CapacityStep and player:GetAttribute("TreadLevel") == Config.MaxTreadLevel)
+task.wait(0.3)
+check("Respawn at own base", (character().HumanoidRootPart.Position - World.SpawnPoint(baseIndex)).Magnitude < 10)
 teleport(SAFE)
 
 return { passed = #passed, failed = failed, temporaryProgress = true }

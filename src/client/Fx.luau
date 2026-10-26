@@ -18,6 +18,7 @@ type Tracked = { Pose: Monsters.Pose, Root: BasePart, Last: Vector3, Speed: numb
 local tracked: { [Model]: Tracked } = {}
 local belts: { Texture } = {}
 local shake = { Strength = 0, Until = 0 }
+local boostUntil, boostLevel = 0, 0
 
 local function track(model: Instance)
 	if not model:IsA("Model") or tracked[model] then
@@ -48,11 +49,17 @@ function Fx.Init(world: Instance)
 	monsterFolder.ChildRemoved:Connect(function(model)
 		tracked[model :: Model] = nil
 	end)
-	for _, item in world:WaitForChild("Sanctuary"):WaitForChild("Treadmills"):GetDescendants() do
+	-- Treadmills are rebuilt on every upgrade, so keep collecting their belt textures.
+	local bases = world:WaitForChild("Sanctuary"):WaitForChild("Bases")
+	local function addBelt(item: Instance)
 		if item:IsA("Texture") and item.Name == "Stripes" then
 			table.insert(belts, item)
 		end
 	end
+	for _, item in bases:GetDescendants() do
+		addBelt(item)
+	end
+	bases.DescendantAdded:Connect(addBelt)
 	RunService:BindToRenderStep("MonsterEggShake", Enum.RenderPriority.Camera.Value + 1, function()
 		local now = os.clock()
 		if now < shake.Until then
@@ -81,9 +88,17 @@ function Fx.Step(t: number, dt: number)
 			Monsters.Animate(info.Pose, t, info.Sleep, math.clamp(info.Speed / 22, 0, 1), (model:GetAttribute("Rage") or 0) :: number)
 		end
 	end
-	for _, texture in belts do
-		texture.OffsetStudsV = (texture.OffsetStudsV - dt * 9) % 3
+	for i = #belts, 1, -1 do
+		local texture = belts[i]
+		if texture.Parent then
+			texture.OffsetStudsV = (texture.OffsetStudsV - dt * 9) % 3
+		else
+			table.remove(belts, i)
+		end
 	end
+	local camera = Workspace.CurrentCamera
+	local targetFov = if os.clock() < boostUntil then 70 + boostLevel * 0.8 else 70
+	camera.FieldOfView += (targetFov - camera.FieldOfView) * math.min(dt * 4, 1)
 end
 
 -- Sounds ---------------------------------------------------------------------------
@@ -180,6 +195,38 @@ function Fx.Float(text: string, color: Color3)
 	task.delay(1.2, function()
 		gui:Destroy()
 	end)
+end
+
+-- Running on your own treadmill: speed lines at your feet and a slightly wider view.
+function Fx.RunBoost(color: Color3, level: number)
+	boostUntil = os.clock() + 1.3
+	boostLevel = level
+	local root = rootPart()
+	if not root then
+		return
+	end
+	local emitter = root:FindFirstChild("SpeedLines", true) :: ParticleEmitter?
+	if not emitter then
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "SpeedLinesAt"
+		attachment.Position = Vector3.new(0, -2.6, 0.8)
+		attachment.Parent = root
+		local e = Instance.new("ParticleEmitter")
+		e.Name = "SpeedLines"
+		e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		e.Rate = 0
+		e.Speed = NumberRange.new(10, 18)
+		e.EmissionDirection = Enum.NormalId.Back
+		e.SpreadAngle = Vector2.new(15, 15)
+		e.Lifetime = NumberRange.new(0.3, 0.5)
+		e.LightEmission = 1
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) })
+		e.Parent = attachment
+		emitter = e
+	end
+	local e = emitter :: ParticleEmitter
+	e.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+	e:Emit(6 + level * 2)
 end
 
 function Fx.Knockback(from: Vector3)

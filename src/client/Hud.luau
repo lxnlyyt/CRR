@@ -257,7 +257,10 @@ function Hud.Update()
 	refs.Speed.Text = string.format("Speed %.1f", player:GetAttribute("WalkSpeed") or Config.BaseWalkSpeed)
 	local training = player:GetAttribute("Training") or 0
 	refs.TrainingFill.Size = UDim2.fromScale(math.clamp(training / Config.TrainingCap, 0, 1), 1)
-	refs.TrainingText.Text = if training >= Config.TrainingCap then "Training MAX" else string.format("Training %d / %d", training, Config.TrainingCap)
+	local treadLevel = player:GetAttribute("TreadLevel") or 1
+	refs.TrainingText.Text = if training >= Config.TrainingCap
+		then string.format("Treadmill Lv %d  •  Training MAX", treadLevel)
+		else string.format("Treadmill Lv %d  •  Training %d/%d", treadLevel, training, Config.TrainingCap)
 	refs.Save.Text = player:GetAttribute("SaveStatus") or ""
 
 	local carrying = player:GetAttribute("Carrying") or ""

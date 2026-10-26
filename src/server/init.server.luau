@@ -1,4 +1,4 @@
--- MONSTER EGG ESCAPE server: eggs, theft, banking, plots, treadmills, upgrades, trails and saving.
+-- MONSTER EGG ESCAPE server: eggs, theft, banking, personal bases and treadmills, upgrades, trails and saving.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -46,7 +46,7 @@ type Carried = { Zone: number, Rarity: number, Model: Model, Since: number }
 
 local profiles: { [Player]: Data.Profile } = {}
 local carried: { [Player]: Carried } = {}
-local plots: { [Player]: Model } = {}
+local bases: { [Player]: Model } = {}
 local guardians = {}
 local rng = Random.new()
 
@@ -96,8 +96,7 @@ local function sync(player: Player)
 	player:SetAttribute("TreadLevel", profile.TreadLevel)
 	player:SetAttribute("Trail", profile.Trail)
 	player:SetAttribute("OwnedTrails", table.concat(profile.Trails, ","))
-	player:SetAttribute("Treads", string.format("%d%d%d", profile.Treads[1] and 1 or 0, profile.Treads[2] and 1 or 0, profile.Treads[3] and 1 or 0))
-	local walk = Config.WalkSpeed(profile.SpeedLevel, profile.Training, profile.Trail)
+	local walk = Config.WalkSpeed(profile.SpeedLevel, profile.Training, profile.Trail, profile.TreadLevel)
 	player:SetAttribute("WalkSpeed", walk)
 	local stats = player:FindFirstChild("leaderstats")
 	if stats then
@@ -148,17 +147,33 @@ local function applyTrail(player: Player)
 	trail.Parent = root
 end
 
--- Plots ----------------------------------------------------------------------------
+-- Personal bases -----------------------------------------------------------------
 
 local sellEgg: (Player, number) -> ()
+local refreshTreadmill: (Model, Player?) -> ()
 
-local function redrawPlot(player: Player)
-	local plot, profile = plots[player], profiles[player]
-	if not plot or not profile then
+local function setSign(base: Model, text: string)
+	for _, gui in (base:FindFirstChild("OwnerSign") :: BasePart):GetChildren() do
+		local label = (gui :: SurfaceGui):FindFirstChild("Owner") :: TextLabel?
+		if label then
+			label.Text = text
+		end
+	end
+end
+
+local function setIncomeLabel(base: Model, text: string)
+	local gui = (base:FindFirstChild("PenFloor") :: BasePart):FindFirstChild("Income") :: BillboardGui
+	local label = gui:FindFirstChild("Text") :: TextLabel
+	label.Text = text
+end
+
+local function redrawBase(player: Player)
+	local base, profile = bases[player], profiles[player]
+	if not base or not profile then
 		return
 	end
-	local index = plot:GetAttribute("Index") :: number
-	local old = plot:FindFirstChild("Eggs")
+	local index = base:GetAttribute("Index") :: number
+	local old = base:FindFirstChild("Eggs")
 	if old then
 		old:Destroy()
 	end
@@ -167,7 +182,7 @@ local function redrawPlot(player: Player)
 	for slot, egg in profile.Eggs do
 		local model = Eggs.Build(egg.Z, egg.R, CFrame.new(World.SlotPosition(index, slot)) * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), {
 			Scale = 0.75,
-			Light = false, -- many lit eggs side by side overexpose the plot
+			Light = false, -- many lit eggs side by side overexpose the pen
 			Parent = eggsFolder,
 		})
 		model:SetAttribute("Slot", slot)
@@ -180,57 +195,51 @@ local function redrawPlot(player: Player)
 			end
 		end)
 	end
-	eggsFolder.Parent = plot
-	local income = incomeOf(profile)
-	local label = (plot:FindFirstChild("Floor") :: BasePart):FindFirstChild("Income") :: BillboardGui
-	(label:FindFirstChild("Text") :: TextLabel).Text = string.format("$%s/s  •  %d/%d eggs", Config.Format(income), #profile.Eggs, profile.Capacity)
+	eggsFolder.Parent = base
+	setIncomeLabel(base, string.format("$%s/s  •  %d/%d eggs", Config.Format(incomeOf(profile)), #profile.Eggs, profile.Capacity))
 end
 
-local function assignPlot(player: Player): Model?
+local function assignBase(player: Player): Model?
 	for index = 1, Config.MaxPlayers do
-		local plot = sanctuary.Plots:FindFirstChild("Plot" .. index) :: Model
-		if (plot:GetAttribute("Owner") or 0) == 0 then
-			plot:SetAttribute("Owner", player.UserId)
-			for _, gui in (plot:FindFirstChild("OwnerSign") :: BasePart):GetChildren() do
-				((gui :: SurfaceGui):FindFirstChild("Owner") :: TextLabel).Text = string.upper(player.DisplayName) .. "'S PLOT"
-			end
-			plots[player] = plot
-			player:SetAttribute("Plot", index)
-			return plot
+		local base = sanctuary.Bases:FindFirstChild("Base" .. index) :: Model
+		if (base:GetAttribute("Owner") or 0) == 0 then
+			base:SetAttribute("Owner", player.UserId)
+			setSign(base, string.upper(player.DisplayName) .. "'S BASE")
+			bases[player] = base
+			player:SetAttribute("Base", index)
+			return base
 		end
 	end
 	return nil
 end
 
-local function releasePlot(player: Player)
-	local plot = plots[player]
-	if not plot then
+local function releaseBase(player: Player)
+	local base = bases[player]
+	if not base then
 		return
 	end
-	plot:SetAttribute("Owner", 0)
-	for _, gui in (plot:FindFirstChild("OwnerSign") :: BasePart):GetChildren() do
-		((gui :: SurfaceGui):FindFirstChild("Owner") :: TextLabel).Text = "EMPTY PLOT"
-	end
-	local eggsFolder = plot:FindFirstChild("Eggs")
+	base:SetAttribute("Owner", 0)
+	setSign(base, "FREE BASE")
+	local eggsFolder = base:FindFirstChild("Eggs")
 	if eggsFolder then
 		eggsFolder:Destroy()
 	end
-	local label = (plot:FindFirstChild("Floor") :: BasePart):FindFirstChild("Income") :: BillboardGui
-	(label:FindFirstChild("Text") :: TextLabel).Text = "Free plot"
-	plots[player] = nil
+	setIncomeLabel(base, "Free base")
+	bases[player] = nil
+	refreshTreadmill(base, nil)
 end
 
 sellEgg = function(player: Player, slot: number)
 	local profile = profiles[player]
-	local plot = plots[player]
+	local base = bases[player]
 	local egg = profile and profile.Eggs[slot]
-	if not egg or not plot or not near(player, World.SlotPosition(plot:GetAttribute("Index") :: number, slot), 12) then
+	if not egg or not base or not near(player, World.SlotPosition(base:GetAttribute("Index") :: number, slot), 12) then
 		return
 	end
 	local value = Config.EggIncome(egg.Z, egg.R) * Config.SellSeconds
 	table.remove(profile.Eggs, slot)
 	profile.Cash += value
-	redrawPlot(player)
+	redrawBase(player)
 	sync(player)
 	notice(player, string.format("Sold %s for $%s", Eggs.Title(egg.Z, egg.R), Config.Format(value)), "good")
 	EffectEvent:FireClient(player, "Cash", value)
@@ -274,7 +283,7 @@ local function steal(thief: Player, victim: Player, model: Model)
 		return
 	end
 	if #profiles[thief].Eggs >= profiles[thief].Capacity then
-		notice(thief, "Your plot is full! Upgrade storage or sell eggs.", "bad")
+		notice(thief, "Your base is full! Upgrade storage or sell eggs.", "bad")
 		return
 	end
 	local zone, rarity = item.Zone, item.Rarity
@@ -295,7 +304,7 @@ attachEgg = function(player: Player, zone: number, rarity: number): boolean
 		return false
 	end
 	if #profile.Eggs >= profile.Capacity then
-		notice(player, "Your plot is full! Upgrade storage or sell eggs.", "bad")
+		notice(player, "Your base is full! Upgrade storage or sell eggs.", "bad")
 		return false
 	end
 	local offset = CFrame.new(0, 4, 0)
@@ -341,7 +350,7 @@ local function bank(player: Player)
 	local title = Eggs.Title(item.Zone, item.Rarity)
 	local rarity = item.Rarity
 	dropEgg(player)
-	redrawPlot(player)
+	redrawBase(player)
 	sync(player)
 	notice(player, string.format("SAFE! %s banked  +$%s", title, Config.Format(bonus)), if rarity >= 5 then "rare" else "good")
 	EffectEvent:FireClient(player, "Banked", rarity, bonus)
@@ -418,28 +427,53 @@ function purchases.Storage(player: Player, profile: Data.Profile)
 	end
 	if spend(player, profile, Config.StorageCost(profile.Capacity)) then
 		profile.Capacity += Config.CapacityStep
-		redrawPlot(player)
-		notice(player, "Plot expanded to " .. profile.Capacity .. " eggs!", "good")
+		redrawBase(player)
+		notice(player, "Base expanded to " .. profile.Capacity .. " eggs!", "good")
 	end
 end
 
-function purchases.Power(player: Player, profile: Data.Profile)
+refreshTreadmill = function(base: Model, player: Player?)
+	local index = base:GetAttribute("Index") :: number
+	local profile = player and profiles[player]
+	local level = if profile then profile.TreadLevel else 1
+	local model = World.BuildTreadmill(base, index, level)
+	local console = model:FindFirstChild("Console") :: BasePart
+	local sign = console:FindFirstChild("Sign")
+	local info = sign and sign:FindFirstChild("Info") :: TextLabel?
+	local bonus = (level - 1) * Config.TreadSpeedPerLevel
+	local maxed = level >= Config.MaxTreadLevel
+	if info then
+		info.Text = if maxed
+			then string.format("MAX LEVEL  •  +%.1f speed", bonus)
+			else string.format("+%.1f speed  •  next $%s", bonus, Config.Format(Config.TreadCost(level)))
+	end
+	if player then
+		local prompt = Style.Prompt(console, if maxed then "Max level" else "Upgrade $" .. Config.Format(Config.TreadCost(level)), "Treadmill Lv " .. level, 0.4, 16)
+		prompt.Name = "UpgradePrompt"
+		prompt.Enabled = false -- the owner's client enables its own upgrade prompt
+		prompt.Triggered:Connect(function(who)
+			local current = profiles[player]
+			if who == player and current and bases[player] == base then
+				purchases.Treadmill(player, current)
+				sync(player)
+			end
+		end)
+	end
+end
+
+function purchases.Treadmill(player: Player, profile: Data.Profile)
 	if profile.TreadLevel >= Config.MaxTreadLevel then
-		return notice(player, "Treadmill power is maxed out!", "info")
+		return notice(player, "Your treadmill is already max level!", "info")
 	end
 	if spend(player, profile, Config.TreadCost(profile.TreadLevel)) then
 		profile.TreadLevel += 1
-		notice(player, "Treadmill power level " .. profile.TreadLevel .. "!", "good")
-	end
-end
-
-local function unlockTreadmill(player: Player, profile: Data.Profile, tier: number)
-	if profile.Treads[tier] then
-		return notice(player, "Already unlocked — hop on!", "info")
-	end
-	if spend(player, profile, Config.Treadmills[tier].Cost) then
-		profile.Treads[tier] = true
-		notice(player, Config.Treadmills[tier].Name .. " treadmill unlocked!", "good")
+		local design = Config.TreadmillDesigns[profile.TreadLevel]
+		local base = bases[player]
+		if base then
+			refreshTreadmill(base, player)
+		end
+		notice(player, string.format("Treadmill level %d: %s! +%.1f walk speed", profile.TreadLevel, design.Name, Config.TreadSpeedPerLevel), "rare")
+		EffectEvent:FireClient(player, "TreadUp", profile.TreadLevel)
 	end
 end
 
@@ -458,12 +492,6 @@ end
 local boards = sanctuary:WaitForChild("Boards")
 boardPrompt(boards:WaitForChild("SpeedBoard"), "Buy Speed", purchases.Speed)
 boardPrompt(boards:WaitForChild("StorageBoard"), "Buy Storage", purchases.Storage)
-boardPrompt(boards:WaitForChild("PowerBoard"), "Buy Power", purchases.Power)
-for tier = 2, #Config.Treadmills do
-	boardPrompt(sanctuary.Treadmills:WaitForChild("UnlockBoard" .. tier), "Unlock", function(player, profile)
-		unlockTreadmill(player, profile, tier)
-	end)
-end
 
 local shopPart = sanctuary.TrailShop:WaitForChild("PromptPart") :: BasePart
 local shopPrompt = Style.Prompt(shopPart, "Open Shop", "Trail Shop", 0, 12)
@@ -507,6 +535,14 @@ local function onCharacter(player: Player, character: Model)
 	dropEgg(player)
 	sync(player)
 	applyTrail(player)
+	local base = bases[player]
+	if base then
+		-- Everyone spawns at their own base, facing the zones.
+		local spawnAt = World.SpawnPoint(base:GetAttribute("Index") :: number)
+		task.defer(function()
+			character:PivotTo(CFrame.lookAt(spawnAt, spawnAt + Vector3.zAxis))
+		end)
+	end
 	humanoid.Died:Connect(function()
 		dropEgg(player)
 	end)
@@ -524,7 +560,8 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	profiles[player] = profile
-	if not assignPlot(player) then
+	local base = assignBase(player)
+	if not base then
 		Data.Save(player, profile, true)
 		profiles[player] = nil
 		player:Kick("This server is full. Please join another server.")
@@ -546,7 +583,8 @@ local function onPlayerAdded(player: Player)
 		profile.Cash += offline
 		task.delay(3, notice, player, "Welcome back! Your eggs earned $" .. Config.Format(offline) .. " while you were away.", "good")
 	end
-	redrawPlot(player)
+	redrawBase(player)
+	refreshTreadmill(base, player)
 	sync(player)
 	player.CharacterAdded:Connect(function(character)
 		onCharacter(player, character)
@@ -567,7 +605,7 @@ Players.PlayerRemoving:Connect(function(player)
 	if profile then
 		Data.Save(player, profile, true)
 	end
-	releasePlot(player)
+	releaseBase(player)
 	profiles[player] = nil
 end)
 
@@ -638,21 +676,15 @@ RunService.Heartbeat:Connect(function(dt)
 	for player, profile in profiles do
 		profile.Cash += incomeOf(profile)
 		local root = rootOf(player)
-		if root and not carried[player] then
-			for _, info in World.Treadmills do
-				local offset = root.Position - info.Center
-				if math.abs(offset.X) < 4.6 and math.abs(offset.Z) < 7.8 and offset.Y < 7 and offset.Y > 0 then
-					if profile.Treads[info.Tier] then
-						local power = Config.TreadPower(info.Tier, profile.TreadLevel)
-						profile.Training = math.min(profile.Training + power, Config.TrainingCap * 10)
-						local earned = math.floor(2 * power + profile.SpeedLevel)
-						profile.Cash += earned
-						EffectEvent:FireClient(player, "Treadmill", earned, power)
-					elseif ticks % 3 == 0 then
-						notice(player, "Unlock this treadmill at the board in front of it!", "info")
-					end
-					break
-				end
+		local base = bases[player]
+		if root and base and not carried[player] then
+			-- Only your own treadmill pays out.
+			local offset = World.TreadmillCFrame(base:GetAttribute("Index") :: number):PointToObjectSpace(root.Position)
+			if math.abs(offset.X) < 4.6 and math.abs(offset.Z) < 7.8 and offset.Y < 7 and offset.Y > 0 then
+				profile.Training = math.min(profile.Training + Config.TreadPower(profile.TreadLevel), Config.TrainingCap * 10)
+				local earned = Config.TreadCash(profile.TreadLevel, profile.SpeedLevel)
+				profile.Cash += earned
+				EffectEvent:FireClient(player, "Treadmill", earned, profile.TreadLevel)
 			end
 		end
 		sync(player)
@@ -715,7 +747,7 @@ if RunService:IsStudio() then
 			return {
 				Profile = profile,
 				Carrying = carried[player] and { Zone = carried[player].Zone, Rarity = carried[player].Rarity } or nil,
-				Plot = plots[player],
+				Base = bases[player],
 			}
 		elseif action == "Guardian" then
 			local g = guardians[arg]
@@ -727,10 +759,10 @@ if RunService:IsStudio() then
 		elseif action == "Sell" then
 			sellEgg(player, arg)
 			return #profile.Eggs
-		elseif action == "Unlock" then
-			unlockTreadmill(player, profile, arg)
+		elseif action == "UpgradeTreadmill" then
+			purchases.Treadmill(player, profile)
 			sync(player)
-			return profile.Treads[arg]
+			return profile.TreadLevel
 		elseif action == "Shop" then
 			return handleShop(player, arg.Action, arg.Index)
 		end
@@ -738,4 +770,4 @@ if RunService:IsStudio() then
 	end
 end
 
-print(string.format("[MonsterEgg] Ready: %d zones, %d nests, %d plots", #Config.Zones, #Config.Zones * Config.NestSlots, Config.MaxPlayers))
+print(string.format("[MonsterEgg] Ready: %d zones, %d nests, %d bases", #Config.Zones, #Config.Zones * Config.NestSlots, Config.MaxPlayers))

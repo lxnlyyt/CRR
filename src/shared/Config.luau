@@ -4,15 +4,15 @@ local Config = {}
 
 Config.Version = 2
 Config.DataStoreName = "MonsterEggEscape_v2"
-Config.MaxPlayers = 8
+Config.MaxPlayers = 7 -- one personal base per player
 
--- Map layout (studs). The sanctuary sits between z = -80 and SafeZ; zones follow in a straight line.
+-- Map layout (studs). The sanctuary sits between z = -100 and SafeZ; zones follow in a straight line.
 Config.SafeZ = 80
-Config.SanctuaryStart = -80
+Config.SanctuaryStart = -100
 Config.ZoneLength = 180
 Config.HalfWidth = 75
 Config.WallHeight = 64
-Config.SpawnPosition = Vector3.new(0, 0.5, -64)
+Config.SpawnPosition = Vector3.new(0, 0.5, -90) -- fallback; players spawn at their own base
 
 -- Gameplay
 Config.BaseWalkSpeed = 20
@@ -35,6 +35,36 @@ Config.StartCapacity = 8
 Config.MaxCapacity = 32
 Config.CapacityStep = 4
 Config.MaxTreadLevel = 15
+Config.TreadSpeedPerLevel = 1.2 -- permanent WalkSpeed per treadmill level above 1
+
+-- One look per treadmill level: frame colour, glowing accent. Higher levels add more features.
+Config.TreadmillDesigns = {
+	{ Name = "Rusty", Frame = Color3.fromRGB(150, 110, 80), Accent = Color3.fromRGB(230, 170, 100) },
+	{ Name = "Steel", Frame = Color3.fromRGB(120, 130, 150), Accent = Color3.fromRGB(205, 220, 240) },
+	{ Name = "Mint", Frame = Color3.fromRGB(60, 160, 120), Accent = Color3.fromRGB(130, 255, 200) },
+	{ Name = "Ocean", Frame = Color3.fromRGB(40, 100, 180), Accent = Color3.fromRGB(90, 200, 255) },
+	{ Name = "Neon", Frame = Color3.fromRGB(40, 40, 70), Accent = Color3.fromRGB(80, 255, 240) },
+	{ Name = "Electric", Frame = Color3.fromRGB(40, 50, 120), Accent = Color3.fromRGB(130, 170, 255) },
+	{ Name = "Sunset", Frame = Color3.fromRGB(200, 90, 60), Accent = Color3.fromRGB(255, 190, 80) },
+	{ Name = "Gold", Frame = Color3.fromRGB(190, 140, 30), Accent = Color3.fromRGB(255, 225, 100) },
+	{ Name = "Ruby", Frame = Color3.fromRGB(150, 20, 50), Accent = Color3.fromRGB(255, 80, 120) },
+	{ Name = "Emerald", Frame = Color3.fromRGB(20, 120, 60), Accent = Color3.fromRGB(80, 255, 140) },
+	{ Name = "Amethyst", Frame = Color3.fromRGB(90, 40, 150), Accent = Color3.fromRGB(200, 120, 255) },
+	{ Name = "Inferno", Frame = Color3.fromRGB(120, 30, 10), Accent = Color3.fromRGB(255, 120, 30) },
+	{ Name = "Galaxy", Frame = Color3.fromRGB(25, 15, 60), Accent = Color3.fromRGB(150, 110, 255) },
+	{ Name = "Prism", Frame = Color3.fromRGB(235, 235, 250), Accent = Color3.fromRGB(255, 120, 220) },
+	{ Name = "Divine", Frame = Color3.fromRGB(235, 195, 110), Accent = Color3.fromRGB(255, 225, 120) },
+}
+
+Config.BaseColors = {
+	Color3.fromRGB(255, 120, 120),
+	Color3.fromRGB(110, 185, 255),
+	Color3.fromRGB(130, 225, 110),
+	Color3.fromRGB(255, 200, 90),
+	Color3.fromRGB(195, 135, 255),
+	Color3.fromRGB(100, 225, 215),
+	Color3.fromRGB(255, 145, 205),
+}
 
 Config.Sounds = {
 	Pickup = { Id = "rbxasset://sounds/action_get_up.mp3", Pitch = 1.6, Volume = 0.7 },
@@ -142,12 +172,6 @@ Config.Trails = {
 	{ Name = "Divine", Cost = 1000000, Multiplier = 1.8, Colors = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 200, 240) } },
 } :: { Trail }
 
-Config.Treadmills = {
-	{ Name = "Basic", Cost = 0, Power = 1, Color = Color3.fromRGB(80, 220, 255) },
-	{ Name = "Turbo", Cost = 1500, Power = 3, Color = Color3.fromRGB(255, 196, 46) },
-	{ Name = "Hyper", Cost = 20000, Power = 8, Color = Color3.fromRGB(255, 80, 200) },
-}
-
 function Config.SpeedCost(level: number): number
 	return math.floor(60 * (level + 1) ^ 2.1)
 end
@@ -156,12 +180,18 @@ function Config.StorageCost(capacity: number): number
 	return math.floor(400 * 3 ^ ((capacity - Config.StartCapacity) / Config.CapacityStep))
 end
 
+-- Cost to upgrade a treadmill from `level` to `level + 1`.
 function Config.TreadCost(level: number): number
-	return math.floor(250 * 2.2 ^ level)
+	return math.floor(200 * 1.85 ^ (level - 1))
 end
 
-function Config.TreadPower(tier: number, level: number): number
-	return Config.Treadmills[tier].Power * (1 + 0.25 * level)
+-- Training points per second while running on your own treadmill.
+function Config.TreadPower(level: number): number
+	return level
+end
+
+function Config.TreadCash(level: number, speedLevel: number): number
+	return 2 * level + speedLevel
 end
 
 function Config.EggIncome(zone: number, rarity: number): number
@@ -194,9 +224,10 @@ function Config.RollRarity(zone: number, rng: Random): number
 	return 1
 end
 
-function Config.WalkSpeed(speedLevel: number, training: number, trail: number): number
+function Config.WalkSpeed(speedLevel: number, training: number, trail: number, treadLevel: number): number
 	local base = Config.BaseWalkSpeed + speedLevel * Config.SpeedPerLevel
 		+ math.min(training, Config.TrainingCap) / Config.TrainingDivisor
+		+ (math.max(treadLevel, 1) - 1) * Config.TreadSpeedPerLevel
 	local multiplier = if trail > 0 then Config.Trails[trail].Multiplier else 1
 	return base * multiplier
 end

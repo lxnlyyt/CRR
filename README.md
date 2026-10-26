@@ -10,9 +10,10 @@ A colourful Roblox simulator: sneak into monster nests, steal eggs, outrun the g
 - **Monster Rage:** Epic and rarer eggs enrage the guardian (fire, red eyes, faster). Legendary and rarer eggs add charge dashes. Rage builds the longer the chase lasts.
 - **Carrying and stealing:** the egg floats above your head. Other players can steal it with a prompt outside the safe zone, after a two-second grace period.
 - **Safe zone:** crossing the green gate banks the egg with an instant bonus. Monsters can't enter.
-- **Personal plots:** eight open plots with wooden fences. Banked eggs earn money every second, including a capped amount while offline. You can sell eggs from your own plot.
-- **Treadmills:** Basic (free), Turbo and Hyper treadmills train speed and pay cash. You can unlock them, plus raise Treadmill Power, at the boards.
-- **Upgrades:** Speed, Storage (8 → 32 eggs) and Treadmill Power boards.
+- **Personal bases (max 7 players):** every player gets their own coloured base and spawns there. A base has a fenced egg pen, a spawn pad, a name arch and a personal treadmill. Banked eggs earn money every second, including a capped amount while offline. You can sell eggs from your own pen.
+- **Personal treadmills (level 1–15):** only your own treadmill trains you and pays cash. Upgrade it at its screen; each level adds +1.2 walk speed permanently (+16.8 at level 15). Each level has its own design (Rusty, Steel, Mint, Ocean, Neon, Electric, Sunset, Gold, Ruby, Emerald, Amethyst, Inferno, Galaxy, Prism, Divine). Higher levels add side lights, sparkles, pylons, an arch, speed rings, flames and finally wings, a halo and a light beam. Running on it shows speed lines and widens the view.
+- **Upgrades:** Speed and Storage (8 → 32 eggs) boards on the plaza.
+- **Map details:** a fountain plaza with a giant Divine egg, benches, planters and lamps, wall banners per base, path edging, and per-zone wall decor (vines, hieroglyphs, icicles, lavafalls, hazard panels, crystals and torches) with ambient particles (leaves, sand, snow, embers, bubbles, motes).
 - **Trail Shop:** six trails, from Mint (+10%) to Divine (+80%) running speed. Buy them at the booth or with the HUD button.
 - **Saving:** session-locked DataStore with autosave every 60 seconds and a save on leave or shutdown. Unpublished Studio sessions clearly show that progress is temporary.
 
@@ -24,7 +25,7 @@ A colourful Roblox simulator: sneak into monster nests, steal eggs, outrun the g
 | `src/shared/Style.luau` | ReplicatedStorage.MonsterEgg | Part, sign, label and particle helpers |
 | `src/shared/Eggs.luau` | ReplicatedStorage.MonsterEgg | Voxel egg models per rarity |
 | `src/shared/Monsters.luau` | ReplicatedStorage.MonsterEgg | Guardian models (loaded from the mesh ids in Config, with a fallback blob) and their client-side animation |
-| `src/shared/World.luau` | ReplicatedStorage.MonsterEgg | Map, plots, treadmills, shops, lighting, edit-time preview |
+| `src/shared/World.luau` | ReplicatedStorage.MonsterEgg | Map, personal bases, treadmill designs, shops, zone details, lighting, edit-time preview |
 | `src/server/init.server.luau` | ServerScriptService.MonsterEggServer | Gameplay server |
 | `src/server/Data.luau` | …MonsterEggServer.Data | DataStore loading/saving with session locks |
 | `src/server/Guardians.luau` | …MonsterEggServer.Guardians | Guardian AI |
@@ -41,8 +42,8 @@ A colourful Roblox simulator: sneak into monster nests, steal eggs, outrun the g
 - **Rojo:** `rojo serve` with `default.project.json`. Turn off `Workspace.StreamingEnabled` in the place.
 - **Check Studio against the repo:** compare `python tools/source_hashes.py` with `tools/SourceHashes.luau` run in Studio.
 
-Publish settings: set the maximum player count to **8** (one plot per player). Enable Studio API access in a test experience to try real saving.
+Publish settings: set the maximum player count to **7** (one base per player). Enable Studio API access in a test experience to try real saving.
 
 ## Testing
 
-`tests/StudioSmoke.luau` runs on the Studio server during a solo Play session through a Studio-only QA hook that refuses cloud-backed profiles. It checks all six zones end to end, plus Rage, getting caught, treadmills, upgrades, trails, selling, storage limits and death handling. See `docs/PLAYTEST.md` for the latest results.
+`tests/StudioSmoke.luau` runs on the Studio server during a solo Play session through a Studio-only QA hook that refuses cloud-backed profiles. It checks all six zones end to end, plus Rage, getting caught, personal bases and spawning, treadmill levels 1–15 and their speed bonus, upgrades, trails, selling, storage limits and death handling. See `docs/PLAYTEST.md` for the latest results.

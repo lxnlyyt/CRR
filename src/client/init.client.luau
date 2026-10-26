@@ -73,8 +73,19 @@ function effects.Cash(amount: number)
 	Fx.Float("+$" .. Config.Format(amount), Color3.fromRGB(255, 214, 80))
 end
 
-function effects.Treadmill(earned: number, power: number)
-	Fx.Float(string.format("+$%s  ⚡+%s", Config.Format(earned), tostring(math.floor(power * 10 + 0.5) / 10)), Color3.fromRGB(120, 230, 255))
+function effects.Treadmill(earned: number, level: number)
+	local design = Config.TreadmillDesigns[level]
+	Fx.Float(string.format("+$%s  ⚡+%d", Config.Format(earned), level), design.Accent)
+	Fx.RunBoost(design.Accent, level)
+end
+
+function effects.TreadUp(level: number)
+	local design = Config.TreadmillDesigns[level]
+	Fx.Sound("Buy")
+	Fx.Sound("Bank")
+	Fx.Burst(design.Accent, 80, 1.6)
+	Fx.Shake(0.6, 0.3)
+	Hud.Splash("TREADMILL LV " .. level .. "!", design.Name .. " design  •  +" .. Config.TreadSpeedPerLevel .. " walk speed", design.Accent)
 end
 
 function effects.Roar(model: Model, raging: boolean)
@@ -100,10 +111,9 @@ EffectEvent.OnClientEvent:Connect(function(name: string, ...)
 	end
 end)
 
--- Personal world labels: board prices, treadmill locks, own egg prompts ------------
+-- Personal world labels: board prices and prompts that only the base owner sees -----
 
 local boards = sanctuary:WaitForChild("Boards")
-local treadmills = sanctuary:WaitForChild("Treadmills")
 
 local function setPrice(model: Instance, text: string)
 	local face = model:FindFirstChild("Board")
@@ -117,30 +127,11 @@ end
 local function refreshWorldLabels()
 	local speed = player:GetAttribute("SpeedLevel") or 0
 	local capacity = player:GetAttribute("Capacity") or Config.StartCapacity
-	local power = player:GetAttribute("TreadLevel") or 0
 	setPrice(boards:WaitForChild("SpeedBoard"), if speed >= Config.MaxSpeedLevel then "MAXED" else string.format("Lv %d → %d  •  $%s", speed, speed + 1, Config.Format(Config.SpeedCost(speed))))
 	setPrice(boards:WaitForChild("StorageBoard"), if capacity >= Config.MaxCapacity then "MAXED" else string.format("%d → %d eggs  •  $%s", capacity, capacity + Config.CapacityStep, Config.Format(Config.StorageCost(capacity))))
-	setPrice(boards:WaitForChild("PowerBoard"), if power >= Config.MaxTreadLevel then "MAXED" else string.format("Lv %d → %d  •  $%s", power, power + 1, Config.Format(Config.TreadCost(power))))
-	local owned = player:GetAttribute("Treads") or "100"
-	for tier = 1, #Config.Treadmills do
-		local unlocked = owned:sub(tier, tier) == "1"
-		local model = treadmills:FindFirstChild("Treadmill" .. tier)
-		local lock = model and model:FindFirstChild("Lock") :: BasePart?
-		if lock then
-			lock.Transparency = if unlocked then 1 else 0.55
-			local lockLabel = lock:FindFirstChild("LockLabel") :: BillboardGui?
-			if lockLabel then
-				lockLabel.Enabled = not unlocked
-			end
-		end
-		local unlockBoard = treadmills:FindFirstChild("UnlockBoard" .. tier)
-		if unlockBoard then
-			setPrice(unlockBoard, if unlocked then "UNLOCKED ✓" else "$" .. Config.Format(Config.Treadmills[tier].Cost))
-		end
-	end
 end
 
--- Hide the steal prompt on our own carried egg; enable sell prompts only in our own plot.
+-- Hide the steal prompt on our own carried egg; sell and upgrade prompts only work in our own base.
 local function configurePrompt(prompt: Instance)
 	if not prompt:IsA("ProximityPrompt") then
 		return
@@ -148,13 +139,13 @@ local function configurePrompt(prompt: Instance)
 	if prompt.Name == "StealPrompt" then
 		local model = prompt:FindFirstAncestorOfClass("Model")
 		prompt.Enabled = model == nil or model:GetAttribute("Carrier") ~= player.UserId
-	elseif prompt.Name == "SellPrompt" then
-		local plot = prompt:FindFirstAncestor("Plot" .. tostring(player:GetAttribute("Plot") or 0))
-		prompt.Enabled = plot ~= nil
+	elseif prompt.Name == "SellPrompt" or prompt.Name == "UpgradePrompt" then
+		local base = prompt:FindFirstAncestor("Base" .. tostring(player:GetAttribute("Base") or 0))
+		prompt.Enabled = base ~= nil
 	end
 end
 
-for _, container in { runtime:WaitForChild("CarriedEggs"), sanctuary:WaitForChild("Plots") } do
+for _, container in { runtime:WaitForChild("CarriedEggs"), sanctuary:WaitForChild("Bases") } do
 	for _, item in container:GetDescendants() do
 		configurePrompt(item)
 	end
@@ -169,10 +160,10 @@ end
 
 player.AttributeChanged:Connect(function(name)
 	Hud.Update()
-	if name == "SpeedLevel" or name == "Capacity" or name == "TreadLevel" or name == "Treads" then
+	if name == "SpeedLevel" or name == "Capacity" then
 		refreshWorldLabels()
-	elseif name == "Plot" then
-		for _, item in sanctuary.Plots:GetDescendants() do
+	elseif name == "Base" then
+		for _, item in sanctuary.Bases:GetDescendants() do
 			configurePrompt(item)
 		end
 	end

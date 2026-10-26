@@ -32,7 +32,6 @@ export type Profile = {
 	Training: number,
 	Capacity: number,
 	TreadLevel: number,
-	Treads: { boolean },
 	Trails: { number },
 	Trail: number,
 	Eggs: { Egg },
@@ -49,8 +48,7 @@ function Data.Default(): Profile
 		SpeedLevel = 0,
 		Training = 0,
 		Capacity = Config.StartCapacity,
-		TreadLevel = 0,
-		Treads = { true, false, false },
+		TreadLevel = 1,
 		Trails = {},
 		Trail = 0,
 		Eggs = {},
@@ -72,8 +70,7 @@ local function reconcile(saved: any): Profile
 	end
 	profile.Capacity = math.clamp(profile.Capacity, Config.StartCapacity, Config.MaxCapacity)
 	profile.SpeedLevel = math.clamp(profile.SpeedLevel, 0, Config.MaxSpeedLevel)
-	profile.TreadLevel = math.clamp(profile.TreadLevel, 0, Config.MaxTreadLevel)
-	profile.Treads[1] = true
+	profile.TreadLevel = math.clamp(math.floor(profile.TreadLevel), 1, Config.MaxTreadLevel)
 	local eggs = {}
 	for _, egg in profile.Eggs do
 		if type(egg) == "table" and Config.Zones[egg.Z] and Config.Rarities[egg.R] and #eggs < profile.Capacity then
@@ -94,7 +91,6 @@ local function payload(profile: Profile)
 		Training = profile.Training,
 		Capacity = profile.Capacity,
 		TreadLevel = profile.TreadLevel,
-		Treads = table.clone(profile.Treads),
 		Trails = table.clone(profile.Trails),
 		Trail = profile.Trail,
 		Eggs = table.clone(profile.Eggs),

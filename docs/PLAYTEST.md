@@ -1,5 +1,18 @@
 # Studio verification — 2026-10-26 (v2 rebuild)
 
+## Update: personal bases and treadmills
+
+The sanctuary was rebuilt with seven personal bases (max 7 players). Each has its own spawn pad, egg pen and treadmill, and the treadmills upgrade from level 1 to 15, each with its own design and +1.2 walk speed per level. The plaza gained a fountain and props; the zones gained wall decor and ambient particles.
+
+- `tests/StudioSmoke.luau`: **107 of 107 checks passed**. New checks:
+  - seven bases, each with a treadmill;
+  - spawning and respawning at your own base;
+  - your own treadmill pays and someone else's doesn't;
+  - level 2 rebuilds the design and adds +1.2 speed;
+  - level 15 has the light beam, can't go higher and gives +16.8 speed.
+- Visual: top-down base layout, a level 15 treadmill in a base, and a showcase of levels 1, 3, 5, 7, 9, 11, 13 and 15. The level 15 frame and light were toned down after the first look was overexposed.
+- No client or server errors in the log. All 11 Studio scripts match `src/`.
+
 ## Update: generated slime guardians
 
 The part-built monsters were replaced by six AI-generated textured meshes (Studio `generate_mesh`), one per biome in matching colours. Nests and guardians moved off the centre path. The game loads each mesh at runtime with `AssetService:CreateMeshPartAsync` from the ids in `Config`, so a published place needs those assets to stay available to the experience owner.
