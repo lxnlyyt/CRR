@@ -1,51 +1,163 @@
--- Execute through MCP in the Server datamodel during a disposable Studio Play session.
--- This deliberately changes temporary test progress; never runs against cloud-backed profiles.
-assert(game:GetService("RunService"):IsStudio(), "Studio only")
-local p=assert(game.Players:GetPlayers()[1], "Start Play first")
-local qa=assert(game.ServerStorage:FindFirstChild("MonsterEggStudioQA"), "Wait for server startup")
-assert(not qa:Invoke("Snapshot",p).Profile.Persistent, "Use an API-disabled test session")
-local C=require(game.ReplicatedStorage.MonsterEgg.Config)
-local checks={}
-local function check(name,condition)
- assert(condition,"FAIL: "..name); table.insert(checks,name)
+-- Server-side smoke test. Run through Studio MCP (execute_luau, Server datamodel) during a solo
+-- Play session. It changes temporary Studio progress only; the QA hook refuses cloud profiles.
+local RunService = game:GetService("RunService")
+assert(RunService:IsStudio() and RunService:IsServer(), "Run on the Studio server during Play")
+local player = game.Players:GetPlayers()[1] or game.Players.PlayerAdded:Wait()
+local qa = assert(game.ServerStorage:WaitForChild("MonsterEggStudioQA", 10), "Wait for server startup")
+local Config = require(game.ReplicatedStorage.MonsterEgg.Config)
+local world = workspace.MonsterEggEscape
+local runtime = world.Runtime
+while not player:GetAttribute("Plot") do
+	task.wait(0.2)
 end
-local world=workspace.MonsterEggEscape
-for i,z in C.Zones do
- check(z.Name.." zone and guardian",world:FindFirstChild(z.Name)~=nil and world:FindFirstChild(z.Monster)~=nil)
+
+local passed, failed = {}, {}
+local function check(name: string, condition: any)
+	table.insert(if condition then passed else failed, name)
 end
-local char=p.Character
-local W=require(game.ReplicatedStorage.MonsterEgg.World)
-local guardian=world[C.Zones[1].Monster]
-char:PivotTo(CFrame.new(W.NestPosition(1,1)+Vector3.new(0,1,-4)))
-task.wait(0.6)
-check("Approaching eggs does not wake guardian",guardian:GetAttribute("State")=="Sleeping")
-check("Guardian lies down beside eggs",math.abs(guardian.PrimaryPart.CFrame.UpVector.Y)<0.1 and (guardian:GetPivot().Position-W.NestPosition(1,2)).Magnitude<25)
-check("Sleeping guardian has closed eyes",guardian:FindFirstChild("Eye").Size.Y<0.2)
-char:PivotTo(CFrame.new(24,4,125))
-check("Divine pickup",qa:Invoke("Carry",p,{Zone=1,Rarity=6}))
-task.wait(0.1)
-check("Taking egg starts wake-up",guardian:GetAttribute("State")=="Waking" and not guardian:GetAttribute("Sleeping"))
-task.wait(1.1)
-local before=guardian:GetPivot().Position; task.wait(0.3)
-check("Guardian pursues carrier",(guardian:GetPivot().Position-before).Magnitude>1)
-check("Guardian stands up to chase",guardian:GetAttribute("State")=="Chasing" and guardian.PrimaryPart.CFrame.UpVector.Y>0.99)
-check("Divine triggers rage and particles",guardian:GetAttribute("Raging") and guardian.PrimaryPart.RageAura.Enabled)
-local count=p:GetAttribute("EggCount")
-char:PivotTo(CFrame.new(0,4,65)); task.wait(0.2)
-check("Sanctuary banks carried egg",p:GetAttribute("EggCount")==count+1 and p:GetAttribute("Carrying")=="")
-check("Sanctuary ends rage",not guardian:GetAttribute("Raging"))
-check("Guardian stays outside sanctuary",guardian:GetPivot().Position.Z>=C.SafeZ+8)
-local cash=p:GetAttribute("Cash"); task.wait(1.2)
-check("Guardian returns to nest and sleeps again",guardian:GetAttribute("State")=="Sleeping" and guardian:GetAttribute("Sleeping"))
-check("Banked eggs earn cash",p:GetAttribute("Cash")>cash and p:GetAttribute("Income")>0)
-local snap=qa:Invoke("Snapshot",p)
-check("Egg is visible in personal plot",#snap.Plot.BankedEggs:GetChildren()==#snap.Profile.Eggs)
-local training=p:GetAttribute("Training"); char:PivotTo(CFrame.new(0,4,14)); task.wait(1.2)
-check("Treadmill trains speed",p:GetAttribute("Training")>training)
-while p:GetAttribute("EggCount")<p:GetAttribute("Capacity") do
- char:PivotTo(CFrame.new(0,4,65)); qa:Invoke("Carry",p,{Zone=1,Rarity=1}); task.wait(0.05)
+
+local function character()
+	local char = player.Character or player.CharacterAdded:Wait()
+	char:WaitForChild("HumanoidRootPart")
+	return char
 end
-char:PivotTo(CFrame.new(24,4,125))
-check("Full storage rejects another egg",not qa:Invoke("Carry",p,{Zone=1,Rarity=1}))
-check("Full storage has no carried egg",p:GetAttribute("Carrying")=="")
-return {passed=#checks,checks=checks,temporaryProgress=true}
+local function teleport(position: Vector3)
+	character():PivotTo(CFrame.new(position) * CFrame.Angles(0, math.pi, 0))
+	task.wait(0.15)
+end
+local function guardian(zone: number)
+	return qa:Invoke("Guardian", player, zone)
+end
+local function waitFor(seconds: number, predicate: () -> boolean): boolean
+	local deadline = os.clock() + seconds
+	while os.clock() < deadline do
+		if predicate() then
+			return true
+		end
+		task.wait(0.1)
+	end
+	return predicate()
+end
+local SAFE = Vector3.new(0, 4, 40)
+
+-- World ------------------------------------------------------------------------------
+check("Six zone folders", #world.Zones:GetChildren() == #Config.Zones)
+check("Six guardians spawned", #runtime.Monsters:GetChildren() == #Config.Zones)
+check("Eighteen nest eggs", waitFor(Config.NestRespawn + 1, function()
+	return #runtime.NestEggs:GetChildren() == #Config.Zones * Config.NestSlots
+end))
+check("Eight fenced plots", #world.Sanctuary.Plots:GetChildren() == Config.MaxPlayers)
+check("Player owns a plot", player:GetAttribute("Plot") ~= nil)
+for zone = 1, #Config.Zones do
+	check(Config.Zones[zone].Monster .. " starts asleep", guardian(zone).State == "Sleeping")
+end
+
+-- Every zone: steal, wake, chase (rage for rare eggs), bank in the safe zone ---------------
+local rarities = { 1, 4, 2, 5, 3, 7 }
+for zone, rarity in rarities do
+	local name = Config.Zones[zone].Monster
+	teleport(Vector3.new(30, 4, Config.ZoneStart(zone) + 15))
+	local before = player:GetAttribute("EggCount")
+	check(name .. ": pickup " .. Config.Rarities[rarity].Name, qa:Invoke("Carry", player, { Zone = zone, Rarity = rarity }))
+	task.wait(0.15)
+	check(name .. ": wakes on theft", guardian(zone).State == "Waking")
+	check(name .. ": egg is carried visibly", #runtime.CarriedEggs:GetChildren() == 1)
+	task.wait(Config.WakeTime + 0.3)
+	local g = guardian(zone)
+	check(name .. ": chases", g.State == "Chasing" and g.Target == player)
+	check(name .. ": chase warning", player:GetAttribute("Chaser") == name)
+	local raging = rarity >= Config.RageRarity
+	local model = runtime.Monsters:FindFirstChild(name)
+	check(name .. ": rage " .. (if raging then "on" else "off"), (g.Rage > 0) == raging and model.Root.RageFire.Enabled == raging)
+	local start = g.Position
+	task.wait(0.4)
+	check(name .. ": moves toward carrier", (guardian(zone).Position - start).Magnitude > 2)
+	teleport(SAFE)
+	task.wait(0.2)
+	check(name .. ": banked in safe zone", player:GetAttribute("EggCount") == before + 1 and player:GetAttribute("Carrying") == "")
+	check(name .. ": gives up at safe zone", guardian(zone).State == "Returning")
+end
+check("All guardians return to sleep", waitFor(20, function()
+	for zone = 1, #Config.Zones do
+		if guardian(zone).State ~= "Sleeping" then
+			return false
+		end
+	end
+	return true
+end))
+check("Banked eggs shown in plot", #qa:Invoke("Snapshot", player).Plot.Eggs:GetChildren() == player:GetAttribute("EggCount"))
+check("Banked eggs give income", (player:GetAttribute("Income") or 0) > 0)
+
+-- Getting caught ---------------------------------------------------------------------------
+local caughtBefore = qa:Invoke("Snapshot", player).Profile.Stats.Caught
+teleport(Vector3.new(0, 4, Config.ZoneStart(1) + 108))
+qa:Invoke("Carry", player, { Zone = 1, Rarity = 1 })
+check("Standing still gets you caught", waitFor(Config.WakeTime + 3, function()
+	return qa:Invoke("Snapshot", player).Profile.Stats.Caught == caughtBefore + 1
+end))
+check("Caught egg is lost", player:GetAttribute("Carrying") == "")
+task.wait(1.5) -- let the client-side knockback finish
+teleport(SAFE)
+
+-- Treadmills, upgrades and trails ------------------------------------------------------------
+local training = player:GetAttribute("Training")
+teleport(Vector3.new(-20, 4, -14))
+task.wait(2.2)
+check("Basic treadmill trains", player:GetAttribute("Training") > training)
+training = player:GetAttribute("Training")
+teleport(Vector3.new(0, 4, -14))
+task.wait(2.2)
+check("Locked treadmill does nothing", player:GetAttribute("Training") == training)
+qa:Invoke("GrantCash", player, 2e6)
+check("Unlock Turbo treadmill", qa:Invoke("Unlock", player, 2) == true)
+task.wait(2.2)
+check("Turbo treadmill trains faster", player:GetAttribute("Training") >= training + 3)
+teleport(SAFE)
+
+local speed, capacity, power = player:GetAttribute("SpeedLevel"), player:GetAttribute("Capacity"), player:GetAttribute("TreadLevel")
+qa:Invoke("Purchase", player, "Speed")
+qa:Invoke("Purchase", player, "Storage")
+qa:Invoke("Purchase", player, "Power")
+check("Speed upgrade", player:GetAttribute("SpeedLevel") == speed + 1)
+check("Storage upgrade", player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
+check("Treadmill power upgrade", player:GetAttribute("TreadLevel") == power + 1)
+
+local walk = character().Humanoid.WalkSpeed
+check("Buy Mint trail", (qa:Invoke("Shop", player, { Action = "Buy", Index = 1 })))
+check("Trail multiplies speed", math.abs(character().Humanoid.WalkSpeed - walk * Config.Trails[1].Multiplier) < 0.05)
+check("Trail is visible", character().HumanoidRootPart:FindFirstChild("EggTrail", true) ~= nil)
+qa:Invoke("Shop", player, { Action = "Buy", Index = 3 })
+check("Buy Prism trail equips it", player:GetAttribute("Trail") == 3)
+qa:Invoke("Shop", player, { Action = "Equip", Index = 1 })
+check("Re-equip owned trail", player:GetAttribute("Trail") == 1)
+check("Cannot buy twice", not (qa:Invoke("Shop", player, { Action = "Buy", Index = 1 })))
+
+-- Selling and storage limits -------------------------------------------------------------------
+local count, cash = player:GetAttribute("EggCount"), player:GetAttribute("Cash")
+local World = require(game.ReplicatedStorage.MonsterEgg.World)
+local slotOne = World.SlotPosition(player:GetAttribute("Plot"), 1)
+teleport(slotOne + Vector3.new(0, 2, -3))
+qa:Invoke("Sell", player, 1)
+check("Sell banked egg", player:GetAttribute("EggCount") == count - 1 and player:GetAttribute("Cash") > cash)
+while player:GetAttribute("EggCount") < player:GetAttribute("Capacity") do
+	teleport(SAFE)
+	qa:Invoke("Carry", player, { Zone = 1, Rarity = 1 })
+	task.wait(0.1)
+end
+teleport(Vector3.new(30, 4, Config.ZoneStart(1) + 60))
+check("Full plot rejects new eggs", not qa:Invoke("Carry", player, { Zone = 1, Rarity = 1 }))
+
+-- Death drops the egg ------------------------------------------------------------------------
+teleport(slotOne + Vector3.new(0, 2, -3))
+qa:Invoke("Sell", player, 1)
+teleport(Vector3.new(30, 4, Config.ZoneStart(1) + 60))
+check("Carry again after selling", qa:Invoke("Carry", player, { Zone = 1, Rarity = 2 }))
+character().Humanoid.Health = 0
+task.wait(0.3)
+check("Death drops carried egg", player:GetAttribute("Carrying") == "")
+player.CharacterAdded:Wait()
+task.wait(0.5)
+check("Respawn keeps progress", player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
+teleport(SAFE)
+
+return { passed = #passed, failed = failed, temporaryProgress = true }
