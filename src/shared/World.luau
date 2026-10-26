@@ -367,13 +367,28 @@ end
 
 -- Zone decor ---------------------------------------------------------------------------
 
+-- Circles (x, z, radius) that decor must stay out of: the current zone's nest and guardian bed.
+local keepClear: { Vector3 } = {}
+
+local function isClear(position: Vector3): boolean
+	for _, circle in keepClear do
+		if (Vector2.new(position.X, position.Z) - Vector2.new(circle.X, circle.Y)).Magnitude < circle.Z then
+			return false
+		end
+	end
+	return true
+end
+
 local function scatter(rng: Random, start: number, count: number, minX: number?, maxX: number?)
 	local out = {}
 	for n = 1, count do
 		local side = if n % 2 == 0 then 1 else -1
 		local x = side * rng:NextNumber(minX or 22, maxX or 68)
 		local z = start + 10 + (n - 0.5) / count * (Config.ZoneLength - 20) + rng:NextNumber(-5, 5)
-		table.insert(out, Vector3.new(x, 0, z))
+		local position = Vector3.new(x, 0, z)
+		if isClear(position) then
+			table.insert(out, position)
+		end
 	end
 	return out
 end
@@ -692,8 +707,12 @@ local function buildZone(root: Instance, index: number)
 	Style.Sign(beam, zone.Name:upper() .. " ZONE", subtitle, Style.Lighten(zone.Color, 0.15), Enum.NormalId.Front, 14)
 	Style.Sign(beam, "SAFE ZONE ←", "Bank your egg behind you!", Color3.fromRGB(180, 255, 220), Enum.NormalId.Back, 14)
 
+	local nest = Config.NestCenter(index)
+	local home = Config.GuardianHome(index).Position
+	keepClear = { Vector3.new(nest.X, nest.Z, 18), Vector3.new(home.X, home.Z, 16) }
 	local decor = folder(f, "Decor")
 	DECOR[index](decor, Random.new(index * 97), start)
+	keepClear = {}
 	buildNest(f, index)
 	task.wait()
 	return f

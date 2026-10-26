@@ -5,7 +5,7 @@ A colourful Roblox simulator: sneak into monster nests, steal eggs, outrun the g
 ## Gameplay
 
 - **One long, straight map** with high checker walls and six zones: Forest, Desert, Ice, Lava, Toxic and Shadow. Each zone has its own decor, lighting mood and a nest with three eggs.
-- **Six animated guardians** — Bramble Beast, Dune Scorpion, Frost Yeti, Magma Drake, Sludge Mech and Void Reaper. They sleep beside their nest, wake up when an egg is taken, chase the carrier, stop at the safe zone and walk back to sleep. Getting caught knocks you back and the egg is lost.
+- **Six slime guardians** — Mossmaw, Dune Gloop, Frostgloop, Magma Maw, Sludge King and Void Gloom. Each is an AI-generated textured mesh (Roblox Studio `generate_mesh`) coloured to match its biome, animated with squash & stretch and a red rage glow. Each nest and its guardian sit off the centre path at a different spot in its zone. They sleep beside their nest, wake up when an egg is taken, chase the carrier, stop at the safe zone and slide back to sleep. Getting caught knocks you back and the egg is lost.
 - **Seven egg rarities:** Common, Uncommon, Rare, Epic, Legendary, Mythic and Divine. Deeper zones roll rarer eggs and pay more.
 - **Monster Rage:** Epic and rarer eggs enrage the guardian (fire, red eyes, faster). Legendary and rarer eggs add charge dashes. Rage builds the longer the chase lasts.
 - **Carrying and stealing:** the egg floats above your head. Other players can steal it with a prompt outside the safe zone, after a two-second grace period.
@@ -23,7 +23,7 @@ A colourful Roblox simulator: sneak into monster nests, steal eggs, outrun the g
 | `src/shared/Config.luau` | ReplicatedStorage.MonsterEgg | Zones, rarities, trails, treadmills, prices, formulas |
 | `src/shared/Style.luau` | ReplicatedStorage.MonsterEgg | Part, sign, label and particle helpers |
 | `src/shared/Eggs.luau` | ReplicatedStorage.MonsterEgg | Voxel egg models per rarity |
-| `src/shared/Monsters.luau` | ReplicatedStorage.MonsterEgg | Six guardian rigs and their client-side animation |
+| `src/shared/Monsters.luau` | ReplicatedStorage.MonsterEgg | Guardian models (loaded from the mesh ids in Config, with a fallback blob) and their client-side animation |
 | `src/shared/World.luau` | ReplicatedStorage.MonsterEgg | Map, plots, treadmills, shops, lighting, edit-time preview |
 | `src/server/init.server.luau` | ServerScriptService.MonsterEggServer | Gameplay server |
 | `src/server/Data.luau` | …MonsterEggServer.Data | DataStore loading/saving with session locks |

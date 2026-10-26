@@ -1,5 +1,15 @@
 # Studio verification — 2026-10-26 (v2 rebuild)
 
+## Update: generated slime guardians
+
+The part-built monsters were replaced by six AI-generated textured meshes (Studio `generate_mesh`), one per biome in matching colours. Nests and guardians moved off the centre path. The game loads each mesh at runtime with `AssetService:CreateMeshPartAsync` from the ids in `Config`, so a published place needs those assets to stay available to the experience owner.
+
+- `tests/StudioSmoke.luau`: **100 of 100 checks passed**. New checks: every guardian uses its generated mesh and sleeps off the centre path.
+- Visual: sleeping squash pose in Forest and Lava, and a Sludge King chase leaning forward with the Rage highlight and fire.
+- All 11 Studio scripts match `src/`.
+
+## Original v2 verification
+
 Target: Place1 (unpublished, PlaceId 0) in Roblox Studio, driven through the Roblox Studio MCP server. All scripts were installed into the Edit datamodel and verified byte-for-byte against `src/` with `tools/source_hashes.py` / `tools/SourceHashes.luau` (11 of 11 match). All eleven compile.
 
 ## Passed

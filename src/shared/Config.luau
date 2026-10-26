@@ -58,50 +58,61 @@ export type Zone = {
 	Speed: number,
 	Income: number,
 	Reach: number,
+	MeshId: string, -- AI-generated guardian mesh (Studio generate_mesh)
+	TextureId: string,
+	MeshYaw: number, -- turns the mesh so its face looks down -Z
+	Height: number,
+	Nest: Vector2, -- nest position: X across the corridor, Y = depth into the zone
 }
 
 Config.Zones = {
 	{
-		Name = "Forest", Monster = "Bramble Beast",
+		Name = "Forest", Monster = "Mossmaw",
 		Color = Color3.fromRGB(76, 201, 92), Accent = Color3.fromRGB(255, 214, 92),
 		Ground = Color3.fromRGB(96, 196, 74), Wall = Color3.fromRGB(214, 128, 92), WallAlt = Color3.fromRGB(196, 110, 80),
 		Trim = Color3.fromRGB(70, 178, 64), Fog = Color3.fromRGB(190, 236, 200),
 		Speed = 18, Income = 2, Reach = 8,
+		MeshId = "rbxassetid://100729813706841", TextureId = "rbxassetid://126990797373067", MeshYaw = 0, Height = 13, Nest = Vector2.new(-30, 70),
 	},
 	{
-		Name = "Desert", Monster = "Dune Scorpion",
+		Name = "Desert", Monster = "Dune Gloop",
 		Color = Color3.fromRGB(246, 196, 92), Accent = Color3.fromRGB(196, 92, 52),
 		Ground = Color3.fromRGB(240, 206, 128), Wall = Color3.fromRGB(226, 168, 98), WallAlt = Color3.fromRGB(208, 150, 84),
 		Trim = Color3.fromRGB(250, 222, 150), Fog = Color3.fromRGB(255, 228, 180),
 		Speed = 23, Income = 6, Reach = 8,
+		MeshId = "rbxassetid://129056952654925", TextureId = "rbxassetid://118340515848657", MeshYaw = 0, Height = 12, Nest = Vector2.new(28, 100),
 	},
 	{
-		Name = "Ice", Monster = "Frost Yeti",
+		Name = "Ice", Monster = "Frostgloop",
 		Color = Color3.fromRGB(110, 210, 255), Accent = Color3.fromRGB(220, 248, 255),
 		Ground = Color3.fromRGB(212, 238, 252), Wall = Color3.fromRGB(128, 176, 226), WallAlt = Color3.fromRGB(112, 160, 212),
 		Trim = Color3.fromRGB(245, 252, 255), Fog = Color3.fromRGB(205, 232, 255),
 		Speed = 28, Income = 15, Reach = 8.5,
+		MeshId = "rbxassetid://103432994982097", TextureId = "rbxassetid://123146596024982", MeshYaw = 0, Height = 14, Nest = Vector2.new(-26, 138),
 	},
 	{
-		Name = "Lava", Monster = "Magma Drake",
+		Name = "Lava", Monster = "Magma Maw",
 		Color = Color3.fromRGB(255, 104, 46), Accent = Color3.fromRGB(255, 214, 64),
 		Ground = Color3.fromRGB(74, 52, 58), Wall = Color3.fromRGB(92, 58, 62), WallAlt = Color3.fromRGB(78, 48, 54),
 		Trim = Color3.fromRGB(255, 120, 40), Fog = Color3.fromRGB(255, 150, 110),
 		Speed = 33, Income = 40, Reach = 9,
+		MeshId = "rbxassetid://80319563283730", TextureId = "rbxassetid://112963067084381", MeshYaw = 0, Height = 14, Nest = Vector2.new(20, 92),
 	},
 	{
-		Name = "Toxic", Monster = "Sludge Mech",
+		Name = "Toxic", Monster = "Sludge King",
 		Color = Color3.fromRGB(162, 255, 46), Accent = Color3.fromRGB(140, 70, 200),
 		Ground = Color3.fromRGB(92, 52, 130), Wall = Color3.fromRGB(70, 36, 104), WallAlt = Color3.fromRGB(58, 120, 40),
 		Trim = Color3.fromRGB(150, 245, 60), Fog = Color3.fromRGB(170, 230, 120),
 		Speed = 38, Income = 100, Reach = 9,
+		MeshId = "rbxassetid://94540360805246", TextureId = "rbxassetid://116288831429704", MeshYaw = 0, Height = 15, Nest = Vector2.new(-30, 86),
 	},
 	{
-		Name = "Shadow", Monster = "Void Reaper",
+		Name = "Shadow", Monster = "Void Gloom",
 		Color = Color3.fromRGB(176, 92, 255), Accent = Color3.fromRGB(70, 230, 255),
 		Ground = Color3.fromRGB(42, 30, 66), Wall = Color3.fromRGB(46, 34, 74), WallAlt = Color3.fromRGB(36, 26, 60),
 		Trim = Color3.fromRGB(180, 100, 255), Fog = Color3.fromRGB(120, 80, 170),
 		Speed = 44, Income = 260, Reach = 9.5,
+		MeshId = "rbxassetid://123214066275963", TextureId = "rbxassetid://87795194151672", MeshYaw = math.pi / 2, Height = 13, Nest = Vector2.new(26, 124),
 	},
 } :: { Zone }
 
@@ -207,7 +218,8 @@ function Config.ZoneAt(z: number): number
 end
 
 function Config.NestCenter(index: number): Vector3
-	return Vector3.new(0, 0, Config.ZoneStart(index) + 112)
+	local nest = Config.Zones[index].Nest
+	return Vector3.new(nest.X, 0, Config.ZoneStart(index) + nest.Y)
 end
 
 function Config.NestSlot(index: number, slot: number): Vector3
@@ -217,9 +229,10 @@ end
 
 function Config.GuardianHome(index: number): CFrame
 	local center = Config.NestCenter(index)
-	-- Sleeps behind its nest, facing the sanctuary.
-	local position = center + Vector3.new(0, 0, 17)
-	return CFrame.lookAt(position, position - Vector3.zAxis)
+	-- Sleeps beside its nest (wall side), looking out over the path toward the sanctuary.
+	local side = if center.X < 0 then -1 else 1
+	local position = center + Vector3.new(side * 12, 0, 14)
+	return CFrame.lookAt(position, Vector3.new(center.X * 0.3, 0, position.Z - 40))
 end
 
 local suffixes = { "", "K", "M", "B", "T", "Qd", "Qn" }

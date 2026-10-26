@@ -49,7 +49,11 @@ end))
 check("Eight fenced plots", #world.Sanctuary.Plots:GetChildren() == Config.MaxPlayers)
 check("Player owns a plot", player:GetAttribute("Plot") ~= nil)
 for zone = 1, #Config.Zones do
-	check(Config.Zones[zone].Monster .. " starts asleep", guardian(zone).State == "Sleeping")
+	local name = Config.Zones[zone].Monster
+	local model = runtime.Monsters:FindFirstChild(name)
+	check(name .. " starts asleep", guardian(zone).State == "Sleeping")
+	check(name .. " uses its generated mesh", model ~= nil and model:FindFirstChild("Body") ~= nil and model.Body:IsA("MeshPart"))
+	check(name .. " sleeps off the centre path", math.abs(guardian(zone).Position.X) > 15)
 end
 
 -- Every zone: steal, wake, chase (rage for rare eggs), bank in the safe zone ---------------
@@ -90,7 +94,7 @@ check("Banked eggs give income", (player:GetAttribute("Income") or 0) > 0)
 
 -- Getting caught ---------------------------------------------------------------------------
 local caughtBefore = qa:Invoke("Snapshot", player).Profile.Stats.Caught
-teleport(Vector3.new(0, 4, Config.ZoneStart(1) + 108))
+teleport(Config.NestCenter(1) + Vector3.new(0, 4, -8))
 qa:Invoke("Carry", player, { Zone = 1, Rarity = 1 })
 check("Standing still gets you caught", waitFor(Config.WakeTime + 3, function()
 	return qa:Invoke("Snapshot", player).Profile.Stats.Caught == caughtBefore + 1
