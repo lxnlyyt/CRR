@@ -1,39 +1,42 @@
-# Studio verification — 2026-10-26
+# Studio verification — 2026-10-26 (v2 rebuild)
 
-Target: Place1, PlaceId 0, Roblox Studio MCP. All game objects and scripts were installed in the actual Edit datamodel, then executed in Studio Play mode.
+Target: Place1 (unpublished, PlaceId 0) in Roblox Studio, driven through the Roblox Studio MCP server. All scripts were installed into the Edit datamodel and verified byte-for-byte against `src/` with `tools/source_hashes.py` / `tools/SourceHashes.luau` (11 of 11 match). All eleven compile.
 
 ## Passed
 
-- Sleeping guardian update: all 23 smoke assertions passed in Studio. Guardians lie beside a three-egg cluster, close their eyes and stay asleep when approached. Pickup starts a 1.15-second wake-up, followed by upright pursuit. Banking ends the threat; the guardian returns to the nest and sleeps again.
-- Actual E-key retest: guardian was Sleeping before pickup, Waking after taking a Common Forest egg, and the egg banked successfully with 100 health. The updated scene export matches all four current source scripts.
-
-- Actual egg prompt activated using the E key. Player carried an Uncommon Forest egg visibly, walked back to sanctuary, retained 100 health, banked one egg and earned $6 per second.
-- Treadmill awarded cash and training over three seconds.
-- Actual speed prompt purchased level 1.
-- Death removed the carried egg; respawn restored 100 health, retained the session profile and faced the zones.
-- Actual storage prompt purchased capacity 12.
-- Actual Mint, Prism and Solar trail prompts deducted money, equipped progressively faster trails and created a visible Trail. Speed level 1 plus Solar produced WalkSpeed 36.3. These purchase tests used explicitly granted temporary Studio cash.
-- `tests/StudioSmoke.luau`: 17 assertions passed. Six zones and guardians, Divine pickup, guardian movement, Rage particles, banking, ending Rage, guardian safety boundary, income, visible plot egg, treadmill training and rejecting pickup at full capacity. This script uses a server-only Studio test hook to exercise gameplay functions and refuses cloud-backed profiles.
-- All four game source scripts compiled through Studio's Luau compiler.
+- **`tests/StudioSmoke.luau`: 88 of 88 checks passed.**
+  - World: six zones, six guardians, 18 nest eggs, eight plots, plot assignment.
+  - Each of the six zones: pickup, the guardian wakes on theft, the egg is carried visibly, chase with the HUD warning, Rage on for Epic/Legendary/Divine and off for Common/Uncommon/Rare, the guardian moves toward the carrier, banking in the safe zone and the guardian giving up at the gate.
+  - All guardians return to their nest and sleep again.
+  - Banked eggs appear in the plot and pay income.
+  - Standing still gets you caught and the egg is lost.
+  - The Basic treadmill trains, a locked treadmill does nothing, and an unlocked Turbo treadmill trains faster.
+  - Speed, Storage and Treadmill Power upgrades.
+  - Buying a trail multiplies speed and shows a visible trail; equipping another trail and blocking double purchases both work.
+  - Selling an egg, a full plot rejecting new eggs, death dropping the egg and respawn keeping progress.
+- **Real input:**
+  - Walked to the Forest nest and held E to take an egg.
+  - Standing still: the Bramble Beast woke, chased, caught and knocked back the player, then went back to sleep.
+  - Second run: grabbed an Epic egg, ran back, and the egg was banked with a +$160 bonus and placed in the plot.
+  - Bought Speed level 1 at the board with E (WalkSpeed 20 → 21.5).
+- **Visual checks:**
+  - HUD, zone banner, chase warning with Rage meter, red vignette, carried-egg card with distance to safety, Trail Shop window, toasts and plot eggs.
+  - Monster walk and sleep poses.
+  - Lava, Toxic and Shadow zone moods.
+- **Small phone (Samsung Galaxy A06, 705×338 viewport):** the HUD fits with no clipping, and the touch controls stay clear.
 
 ## Fixed during testing
 
-- Unpublished DataStore initialization originally stopped server startup. Initialization now runs inside pcall; unpublished Studio runs show temporary progress explicitly.
-- Overlapping default Baseplate caused ground artifacts. It is hidden and made non-collidable when generating this map.
-- Spawn orientation now faces the zones.
-- Billboard labels now scale in world space; title, zone and shop signs use SurfaceGui text.
-- Saving now correctly releases the session lock; shutdown waits for pending saves up to 25 seconds.
+- Two "ambiguous syntax" lines (statements starting with `(`) that stopped the server and client scripts.
+- `Workspace.StreamingEnabled` was on, so board prices stayed "Loading..." and other client-side edits could be undone. Streaming is now off in the place, the installer and the place file.
+- Carried rare eggs had a PointLight that washed out the camera. Carried and plot eggs no longer get lights, and nest-egg lights and bloom are softer.
+- Plot egg labels cluttered the view; the sell prompt now shows the egg and its price.
+- The first zone's entry arch overlapped the safe-zone gate, and the zone name on the walls was oversized.
 
-## Still requires a published test experience
+## Not yet verified (needs a published test experience or several clients)
 
-- Persistent save/rejoin round trip, disconnect recovery and cross-server session locking.
-- Two-client theft, simultaneous egg pickup contention, joining/leaving plot reuse and eight-player load testing. The server implements these paths, but solo Play is insufficient proof.
-- Device-specific touch/gamepad usability and performance on low-end devices.
+- Persistent save/rejoin, offline earnings, disconnect recovery and cross-server session locking (DataStores are unavailable in an unpublished place).
+- Stealing between two real players and contention when several players grab eggs at once. The server path exists and validates distance, the safe zone, the grace period and capacity, but solo Play can't exercise it. Use Studio's Test → Clients and Servers with 2 players.
+- Performance on low-end mobile devices with eight players.
 
-No Roblox publication or GitHub push was performed.
-
-## Local artifacts
-
-`dist/MonsterEggEscape.rbxlx` is exported from the actual Studio Edit hierarchy: 1,188 owned instances plus service containers, including scenery, edit previews and all four scripts. XML structure and script/source equality were validated locally. Opening this exported file in a second Studio instance has not been tested. The procedural source and installer remain the reproducible build path.
-
-`tools/ExportPlace.luau` exports the owned scene into `_G.MonsterEggPlaceXML`; MCP reads it in newline-aligned chunks to avoid the tool's output limit. `tools/Build-Place.ps1` produces a smaller source-only place instead and will replace the scene export if run with its default output path.
+No GitHub push or Roblox publication has been performed.
