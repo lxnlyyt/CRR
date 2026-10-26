@@ -4,6 +4,9 @@ Target: Place1, PlaceId 0, Roblox Studio MCP. All game objects and scripts were 
 
 ## Passed
 
+- Sleeping guardian update: all 23 smoke assertions passed in Studio. Guardians lie beside a three-egg cluster, close their eyes and stay asleep when approached. Pickup starts a 1.15-second wake-up, followed by upright pursuit. Banking ends the threat; the guardian returns to the nest and sleeps again.
+- Actual E-key retest: guardian was Sleeping before pickup, Waking after taking a Common Forest egg, and the egg banked successfully with 100 health. The updated scene export matches all four current source scripts.
+
 - Actual egg prompt activated using the E key. Player carried an Uncommon Forest egg visibly, walked back to sanctuary, retained 100 health, banked one egg and earned $6 per second.
 - Treadmill awarded cash and training over three seconds.
 - Actual speed prompt purchased level 1.

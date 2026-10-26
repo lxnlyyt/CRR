@@ -69,8 +69,7 @@ end
 local function spawnEgg(zone,slot)
  local rarity=1; local roll=Random.new():NextNumber(0,100); local total=0
  for i,r in C.Rarities do total+=r.Weight; if roll<=total then rarity=i; break end end
- local z=80+(zone-1)*180+45+slot*28
- local pos=Vector3.new(slot%2==0 and -24 or 24,2.8,z)
+ local pos=W.NestPosition(zone,slot)
  local model=W.Egg(world,zone,rarity,pos)
  local pedestal=W.Part(model,"Nest",Vector3.new(6,0.6,6),CFrame.new(pos.X,0.4,pos.Z),C.Zones[zone].Color:Lerp(Color3.new(0,0,0),0.4),Enum.Material.Slate,Enum.PartType.Cylinder)
  pedestal.CFrame=CFrame.new(pos.X,0.4,pos.Z)*CFrame.Angles(0,0,math.pi/2); pedestal.Size=Vector3.new(0.6,6,6)
@@ -130,8 +129,9 @@ local function load(p)
  redraw(p); sync(p)
 end
 for i=1,6 do
- local z=80+(i-0.5)*180
- local model=W.Monster(world,i,Vector3.new(0,0,z+35)); monsters[i]={Model=model,Home=model:GetPivot(),Phase=0}
+ local model=W.Monster(world,i,W.GuardianPosition(i)); local home=model:GetPivot()
+ monsters[i]={Model=model,Home=home,State="Sleeping"}
+ W.SetSleeping(model,true); model:PivotTo(W.SleepPose(home)); model:SetAttribute("State","Sleeping")
  for s=1,3 do spawnEgg(i,s) end
 end
 local function board(name,pos,color,action,callback)
@@ -182,18 +182,35 @@ Run.Heartbeat:Connect(function(dt)
     local d=(r.Position-m.Model:GetPivot().Position).Magnitude; if d<dist then target=p; dist=d; rarity=item.Rarity end
    end
   end
-  local pivot=m.Model:GetPivot(); local pos=pivot.Position
-  local destination=target and root(target).Position or m.Home.Position
-  local delta=Vector3.new(destination.X-pos.X,0,destination.Z-pos.Z)
-  if delta.Magnitude>0.5 then
-   local speed=target and C.Zones[index].Speed*(1+(rarity-1)*0.13) or 13
-   local nextPos=pos+delta.Unit*math.min(delta.Magnitude,speed*dt); nextPos=Vector3.new(math.clamp(nextPos.X,-66,66),m.Home.Position.Y,math.max(C.SafeZ+8,nextPos.Z))
-   m.Model:PivotTo(CFrame.lookAt(nextPos,nextPos+delta.Unit))
+  local now=os.clock()
+  if target and m.State=="Sleeping" then
+   m.State="Waking"; m.WakeStarted=now; m.WakeFrom=m.Model:GetPivot(); W.SetSleeping(m.Model,false)
+  elseif target and m.State=="Returning" then m.State="Chasing"
+  elseif not target and (m.State=="Chasing" or m.State=="Waking") then m.State="Returning" end
+  if m.State=="Waking" then
+   local alpha=math.clamp((now-m.WakeStarted)/1.15,0,1)
+   m.Model:PivotTo(m.WakeFrom:Lerp(m.Home,alpha*alpha*(3-2*alpha)))
+   if alpha>=1 then m.State="Chasing" end
+  elseif m.State=="Sleeping" then
+   m.Model:PivotTo(W.SleepPose(m.Home)+Vector3.new(0,math.sin(now*1.8+index)*0.09,0))
+  else
+   local pos=m.Model:GetPivot().Position
+   local destination=target and root(target).Position or m.Home.Position
+   local delta=Vector3.new(destination.X-pos.X,0,destination.Z-pos.Z)
+   if delta.Magnitude>0.5 then
+    local speed=target and C.Zones[index].Speed*(1+(rarity-1)*0.13) or 13
+    local nextPos=pos+delta.Unit*math.min(delta.Magnitude,speed*dt); nextPos=Vector3.new(math.clamp(nextPos.X,-66,66),m.Home.Position.Y,math.max(C.SafeZ+8,nextPos.Z))
+    m.Model:PivotTo(CFrame.lookAt(nextPos,nextPos+delta.Unit))
+   elseif not target then
+    m.State="Sleeping"; W.SetSleeping(m.Model,true); m.Model:PivotTo(W.SleepPose(m.Home))
+   end
   end
+  m.Model:SetAttribute("State",m.State)
   m.Model:SetAttribute("Raging",target~=nil and rarity>=4)
   m.Model.PrimaryPart.RageAura.Enabled=target~=nil and rarity>=4
-  m.Model.PrimaryPart.BillboardGui.TextLabel.Text=C.Zones[index].Monster..(target and (rarity>=4 and "\nMONSTER RAGE!" or "\nCHASING!") or "\nGUARDIAN")
-  if target and dist<8 then local h=target.Character and target.Character:FindFirstChildOfClass("Humanoid"); drop(target); if h then h.Health=0 end; notice(target,"The guardian caught you! Train speed and try again.") end
+  local status=m.State=="Sleeping" and "Zzz... SLEEPING" or m.State=="Waking" and "WAKING UP!" or m.State=="Returning" and "RETURNING TO NEST" or rarity>=4 and "MONSTER RAGE!" or "CHASING!"
+  m.Model.PrimaryPart.BillboardGui.TextLabel.Text=C.Zones[index].Monster.."\n"..status
+  if target and m.State=="Chasing" and dist<8 then local h=target.Character and target.Character:FindFirstChildOfClass("Humanoid"); drop(target); if h then h.Health=0 end; notice(target,"The guardian caught you! Train speed and try again.") end
  end
  if accumulated>=1 then
   accumulated-=1; tickCount+=1

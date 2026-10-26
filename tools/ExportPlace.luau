@@ -40,7 +40,7 @@ local groups={
  {"BasePart",{"Anchored","CanCollide","CanTouch","CanQuery","CastShadow","Transparency","Reflectance","Material","Color","Size","CFrame","TopSurface","BottomSurface"}},
  {"Part",{"Shape"}}, {"SpawnLocation",{"Enabled","Neutral","Duration","AllowTeamChangeOnTouch"}},
  {"Model",{"PrimaryPart"}}, {"LuaSourceContainer",{"Source"}},
- {"BillboardGui",{"Size","StudsOffset","AlwaysOnTop","MaxDistance","LightInfluence"}},
+ {"BillboardGui",{"Size","StudsOffset","StudsOffsetWorldSpace","AlwaysOnTop","MaxDistance","LightInfluence"}},
  {"SurfaceGui",{"Face","CanvasSize","LightInfluence"}},
  {"GuiObject",{"Size","Position","BackgroundColor3","BackgroundTransparency","BorderSizePixel"}},
  {"TextLabel",{"Text","TextColor3","TextStrokeTransparency","Font","TextScaled","TextWrapped"}},

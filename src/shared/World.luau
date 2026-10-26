@@ -36,6 +36,25 @@ function W.Egg(parent,zone,rarity,position)
  end
  model.PrimaryPart=core; model.Parent=parent; return model
 end
+function W.GuardianPosition(index)
+ return Vector3.new(42,0,C.SafeZ+(index-0.5)*C.ZoneLength)
+end
+function W.NestPosition(index,slot)
+ return Vector3.new(24,2.8,C.SafeZ+(index-0.5)*C.ZoneLength+(slot-2)*11)
+end
+function W.SleepPose(home)
+ return CFrame.new(home.Position.X,5,home.Position.Z)*CFrame.Angles(0,0,-math.pi/2)
+end
+function W.SetSleeping(model,sleeping)
+ model:SetAttribute("Sleeping",sleeping)
+ for _,part in model:GetChildren() do
+  if part.Name=="Eye" then part.Size=Vector3.new(1.6,sleeping and 0.16 or 1.3,0.7)
+  elseif part.Name=="Pupil" then part.Transparency=sleeping and 1 or 0 end
+ end
+ local gui=model.PrimaryPart.BillboardGui
+ gui.StudsOffsetWorldSpace=sleeping and Vector3.new(0,5,0) or Vector3.zero
+ gui.StudsOffset=sleeping and Vector3.zero or Vector3.new(0,4,0)
+end
 function W.Monster(parent,index,position)
  local z=C.Zones[index]; local m=Instance.new("Model"); m.Name=z.Monster
  local dark=z.Color:Lerp(Color3.new(0,0,0),0.5)
@@ -152,9 +171,11 @@ function W.Preview(root)
  local old=root:FindFirstChild("Preview"); if old then old:Destroy() end
  local preview=Instance.new("Folder"); preview.Name="Preview"; preview.Parent=root
  for i=1,6 do
-  W.Monster(preview,i,Vector3.new(0,0,80+(i-0.5)*180+35))
+  local guardian=W.Monster(preview,i,W.GuardianPosition(i))
+  local home=guardian:GetPivot(); W.SetSleeping(guardian,true); guardian:PivotTo(W.SleepPose(home))
+  guardian.PrimaryPart.BillboardGui.TextLabel.Text=C.Zones[i].Monster.."\nZzz... SLEEPING"
   for slot=1,3 do
-   local e=W.Egg(preview,i,math.min(i,6),Vector3.new(slot%2==0 and -24 or 24,2.8,80+(i-1)*180+45+slot*28))
+   local e=W.Egg(preview,i,math.min(i,6),W.NestPosition(i,slot))
    W.Label(e.PrimaryPart,C.Rarities[math.min(i,6)].Name,C.Rarities[math.min(i,6)].Color)
   end
   task.wait()

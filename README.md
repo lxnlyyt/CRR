@@ -4,6 +4,8 @@ Roblox simulator source: six zones, chasing guardians, six egg rarities, carried
 
 Use egg proximity prompts, then return across the green sanctuary boundary. Stand on treadmills for cash and training. Purchase upgrades at sanctuary boards. Banked eggs are safe; carried eggs can be stolen outside sanctuary after a two-second protection period.
 
+Guardians sleep lying beside a cluster of three eggs. Approaching does not wake them. Taking an egg triggers a 1.15-second wake-up animation before pursuit; after the threat ends they return to their nest and sleep again.
+
 ## Installation
 
 `default.project.json` maps source for Rojo. Alternatively run `powershell -ExecutionPolicy Bypass -File tools/Build-Installer.ps1`, then execute generated `build/Install.luau` through Studio MCP in Edit mode. The installer rebuilds only its own `Workspace.MonsterEggEscape`, adds edit-time previews and disables legacy top-level spawn points. The original Baseplate is hidden and made non-collidable.
@@ -16,4 +18,4 @@ Set the published experience's maximum player count to **8**. Persistent DataSto
 
 ## Verification status
 
-Installed and played in Place1 through Roblox Studio MCP. Actual egg pickup, escape, banking, income, treadmill and upgrade prompts passed. The reproducible Studio smoke test passed 17 assertions. See `docs/PLAYTEST.md` for evidence and remaining published multiplayer/persistence checks. No GitHub push or Roblox publication has been performed.
+Installed and played in Place1 through Roblox Studio MCP. Actual egg pickup, escape, banking, income, treadmill and upgrade prompts passed. The reproducible Studio smoke test passed 23 assertions, including sleeping, waking only after pickup, chasing and returning to sleep. See `docs/PLAYTEST.md` for evidence and remaining published multiplayer/persistence checks. No GitHub push or Roblox publication has been performed.
