@@ -1,0 +1,9 @@
+{
+  "name": "MONSTER EGG ESCAPE",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": { "MonsterEgg": { "$path": "src/shared" } },
+    "ServerScriptService": { "MonsterEggServer": { "$path": "src/server" } },
+    "StarterPlayer": { "StarterPlayerScripts": { "MonsterEggClient": { "$path": "src/client" } } }
+  }
+}
