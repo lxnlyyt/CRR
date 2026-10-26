@@ -13,14 +13,16 @@ $lines.Add('assert(not game:GetService("RunService"):IsRunning(), "Stop Play bef
 $lines.Add('local function install(service,folder,name,class,source)')
 $lines.Add(' local parent=game:GetService(service)')
 $lines.Add(' if folder~="" then local f=parent:FindFirstChild(folder); if not f then f=Instance.new("Folder"); f.Name=folder; f.Parent=parent end; parent=f end')
-$lines.Add(' local s=parent:FindFirstChild(name); if s then assert(s.ClassName==class,"Conflicting instance: "..name) else s=Instance.new(class); s.Name=name; s.Parent=parent end; s.Source=source')
+$lines.Add(' local s=parent:FindFirstChild(name); if s then assert(s.ClassName==class,"Conflicting instance: "..name); if class=="ModuleScript" then s:Destroy(); s=nil end end; if not s then s=Instance.new(class); s.Name=name; s.Parent=parent end; s.Source=source')
 $lines.Add('end')
 foreach ($entry in $sources) {
     $source = [IO.File]::ReadAllText((Join-Path $projectRoot $entry.Path))
     if ($source.Contains(']========]')) { throw 'Source delimiter conflict' }
     $lines.Add(('install("{0}","{1}","{2}","{3}",[========[{4}]========])' -f $entry.Service,$entry.Folder,$entry.Name,$entry.Class,$source))
 }
+$lines.Add('local old=workspace:FindFirstChild("MonsterEggEscape"); if old then old:Destroy() end')
 $lines.Add('local world=require(game.ReplicatedStorage.MonsterEgg.World).Build()')
+$lines.Add('require(game.ReplicatedStorage.MonsterEgg.World).Preview(world)')
 $lines.Add('for _,v in workspace:GetChildren() do if v:IsA("SpawnLocation") then v.Enabled=false end end')
 $lines.Add('workspace.CurrentCamera.CFrame=CFrame.lookAt(Vector3.new(130,145,-180),Vector3.new(0,0,180))')
 $lines.Add('return {installed=true,objects=#world:GetDescendants()}')

@@ -6,10 +6,13 @@ local Run=game:GetService("RunService")
 local C=require(RS.MonsterEgg.Config)
 local W=require(RS.MonsterEgg.World)
 local world=W.Build()
+local preview=world:FindFirstChild("Preview"); if preview then preview:Destroy() end
 local event=Instance.new("RemoteEvent"); event.Name="Notice"; event.Parent=RS.MonsterEgg
 local profiles,carried,plots,eggs,monsters={},{},{},{},{}
 local session=game.JobId~="" and game.JobId or Http:GenerateGUID(false)
-local store=DSS:GetDataStore("MonsterEggEscape_v1")
+local store
+local storeReady,storeError=pcall(function() store=DSS:GetDataStore("MonsterEggEscape_v1") end)
+if not storeReady then warn("[MonsterEgg] DataStore unavailable: "..tostring(storeError)) end
 local function notice(p,s) event:FireClient(p,s) end
 local function root(p) return p.Character and p.Character:FindFirstChild("HumanoidRootPart") end
 local function alive(p) local h=p.Character and p.Character:FindFirstChildOfClass("Humanoid"); return h and h.Health>0 end
@@ -83,15 +86,24 @@ local function save(p,release)
  local d=profiles[p]; if not d or not d.Persistent or d.Saving then return end
  d.Saving=true
  local payload={Cash=d.Cash,Speed=d.Speed,Training=d.Training,Trail=d.Trail,Capacity=d.Capacity,Eggs=table.clone(d.Eggs)}
- local ok,err=pcall(function() store:UpdateAsync("p"..p.UserId,function(old)
+ local written
+ local ok,err=pcall(function() written=store:UpdateAsync("p"..p.UserId,function(old)
   if not old or not old.Lock or old.Lock.Id~=session then return nil end
   if release then payload.Lock=nil else payload.Lock={Id=session,Time=os.time()} end; return payload
  end) end)
- d.Saving=false; if not ok then warn("[MonsterEgg] Save failed: "..tostring(err)) end
+ d.Saving=false
+ if not ok then
+  p:SetAttribute("SaveStatus","Save delayed - retrying next autosave")
+  warn("[MonsterEgg] Save failed: "..tostring(err))
+ elseif not written then
+  d.Persistent=false; p:SetAttribute("SaveStatus","Save session lost")
+  if p.Parent==Players then p:Kick("Your save session changed. Please rejoin to protect progress.") end
+ else p:SetAttribute("SaveStatus","Cloud save connected") end
 end
 local function load(p)
  local loaded
  local ok,err=pcall(function()
+  assert(store,storeError or "DataStore unavailable")
   loaded=store:UpdateAsync("p"..p.UserId,function(old)
    old=old or {Cash=0,Speed=0,Training=0,Trail=0,Capacity=8,Eggs={}}
    if old.Lock and old.Lock.Id~=session and os.time()-old.Lock.Time<180 then return nil end
@@ -102,14 +114,16 @@ local function load(p)
  if ok and not loaded then p:Kick("Your progress is open on another server. Please rejoin shortly."); return end
  local d=loaded or {Cash=0,Speed=0,Training=0,Trail=0,Capacity=8,Eggs={}}
  d.Persistent=ok; profiles[p]=d
+ if p.Parent~=Players then save(p,true); profiles[p]=nil; return end
  p:SetAttribute("SaveStatus",ok and "Cloud save connected" or "STUDIO: temporary progress (API unavailable)")
  if not ok then warn("[MonsterEgg] Studio temporary session: "..tostring(err)) end
  local stats=Instance.new("Folder"); stats.Name="leaderstats"; stats.Parent=p
  local cash=Instance.new("IntValue"); cash.Name="Cash"; cash.Parent=stats
- for i=1,8 do local plot=world.Sanctuary:FindFirstChild("Plot"..i); if plot:GetAttribute("Owner")==0 then plots[p]=plot; plot:SetAttribute("Owner",p.UserId); plot.Floor.BillboardGui.TextLabel.Text=p.DisplayName.."'S SANCTUARY"; break end end
+ for i=1,8 do local plot=world.Sanctuary:FindFirstChild("Plot"..i); if (plot:GetAttribute("Owner") or 0)==0 then plots[p]=plot; plot:SetAttribute("Owner",p.UserId); plot.Floor.BillboardGui.TextLabel.Text=p.DisplayName.."'S SANCTUARY"; break end end
  if not plots[p] then save(p,true); profiles[p]=nil; p:Kick("Sanctuaries full. Please join another server."); return end
  local function character(char)
   local h=char:WaitForChild("Humanoid"); char:WaitForChild("HumanoidRootPart"); sync(p); trail(p)
+  char:PivotTo(CFrame.lookAt(Vector3.new(0,4,-43),Vector3.new(0,4,80)))
   h.Died:Connect(function() drop(p) end)
  end
  p.CharacterAdded:Connect(character); if p.Character then task.spawn(character,p.Character) end
@@ -122,9 +136,9 @@ for i=1,6 do
 end
 local function board(name,pos,color,action,callback)
  local p=W.Part(world.Sanctuary,name,Vector3.new(10,6,1),CFrame.new(pos),color)
- W.Label(p,name.."\n"..action,Color3.new(1,1,1)); W.Prompt(p,action,name,function(player) if near(player,p,12) and profiles[player] then callback(player,profiles[player]) end end); return p
+ W.Sign(p,name.."\n"..action,Color3.new(1,1,1)); W.Prompt(p,action,name,function(player) if near(player,p,12) and profiles[player] then callback(player,profiles[player]) end end); return p
 end
-board("SPEED UPGRADE",Vector3.new(-20,4,-53),Color3.fromRGB(44,158,212),"Buy • $100 × level",function(p,d)
+board("SPEED UPGRADE",Vector3.new(-20,4,-53),Color3.fromRGB(44,158,212),"Cost: $100 x (level+1)^2",function(p,d)
  local cost=100*(d.Speed+1)^2; if d.Speed>=50 then notice(p,"Speed maxed!"); elseif d.Cash>=cost then d.Cash-=cost; d.Speed+=1; sync(p); notice(p,"Speed upgraded!"); else notice(p,"Need $"..cost) end
 end)
 board("STORAGE UPGRADE",Vector3.new(20,4,-53),Color3.fromRGB(125,89,196),"Buy 4 slots",function(p,d)
@@ -150,7 +164,7 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 local tickCount=0; local accumulated=0
 Run.Heartbeat:Connect(function(dt)
- dt=math.min(dt,0.1); accumulated+=dt
+ accumulated+=dt; dt=math.min(dt,0.1)
  for p,item in carried do
   local r=root(p)
   if r and alive(p) then
@@ -177,6 +191,8 @@ Run.Heartbeat:Connect(function(dt)
    m.Model:PivotTo(CFrame.lookAt(nextPos,nextPos+delta.Unit))
   end
   m.Model:SetAttribute("Raging",target~=nil and rarity>=4)
+  m.Model.PrimaryPart.RageAura.Enabled=target~=nil and rarity>=4
+  m.Model.PrimaryPart.BillboardGui.TextLabel.Text=C.Zones[index].Monster..(target and (rarity>=4 and "\nMONSTER RAGE!" or "\nCHASING!") or "\nGUARDIAN")
   if target and dist<8 then local h=target.Character and target.Character:FindFirstChildOfClass("Humanoid"); drop(target); if h then h.Health=0 end; notice(target,"The guardian caught you! Train speed and try again.") end
  end
  if accumulated>=1 then
@@ -193,6 +209,17 @@ Run.Heartbeat:Connect(function(dt)
   if tickCount%60==0 then for p in profiles do task.spawn(save,p,false) end end
  end
 end)
+-- Server-only test seam. Never created on published servers.
+if Run:IsStudio() then
+ local qa=Instance.new("BindableFunction"); qa.Name="MonsterEggStudioQA"; qa.Parent=game:GetService("ServerStorage")
+ qa.OnInvoke=function(action,p,arg)
+  assert(p and profiles[p],"Player profile not ready")
+  if action=="GrantCash" then profiles[p].Cash+=arg; sync(p); return profiles[p].Cash
+  elseif action=="Carry" then drop(p); return carry(p,arg)
+  elseif action=="Snapshot" then return {Profile=profiles[p],Carried=carried[p],Plot=plots[p]} end
+  error("Unknown QA action")
+ end
+end
 game:BindToClose(function()
  local pending=0
  for p in profiles do pending+=1; task.spawn(function() while profiles[p] and profiles[p].Saving do task.wait(0.1) end; save(p,true); pending-=1 end) end
