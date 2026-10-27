@@ -59,6 +59,17 @@ local function label(props: { [string]: any }): TextLabel
 	return l
 end
 
+-- A ForgeGUI icon, or the given text if the icon id isn't configured.
+local function icon(parent: Instance, id: string, size: number, position: UDim2, fallback: string): GuiObject
+	if id:match("^rbxassetid://%d+$") then
+		return make("ImageLabel", {
+			Size = UDim2.fromOffset(size, size), Position = position, BackgroundTransparency = 1,
+			Image = id, ScaleType = Enum.ScaleType.Fit, Parent = parent,
+		}) :: ImageLabel
+	end
+	return label({ Size = UDim2.fromOffset(size, size), Position = position, Text = fallback, Parent = parent })
+end
+
 local function panel(props: { [string]: any }, accent: Color3): Frame
 	props.BackgroundColor3 = props.BackgroundColor3 or PANEL
 	props.BackgroundTransparency = props.BackgroundTransparency or 0.08
@@ -108,25 +119,23 @@ function Hud.Build(onShopAction: (string, number) -> (boolean, string))
 
 	-- Left stat column.
 	local column = make("Frame", {
-		Name = "Stats", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.46, 0), Size = UDim2.fromOffset(250, 330),
+		Name = "Stats", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.46, 0), Size = UDim2.fromOffset(250, 380),
 		BackgroundTransparency = 1, Parent = gui,
 	}, {
 		make("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
 	}) :: Frame
 
 	local cash = panel({ Name = "Cash", Size = UDim2.fromOffset(250, 84), LayoutOrder = 1, Parent = column }, GOLD)
-	make("Frame", {
-		Size = UDim2.fromOffset(56, 56), Position = UDim2.fromOffset(12, 14), BackgroundColor3 = GOLD, Parent = cash,
-	}, { corner(28), stroke(Color3.fromRGB(200, 140, 20), 3), label({ Size = UDim2.fromScale(1, 1), Text = "$", TextColor3 = Color3.fromRGB(255, 255, 230) }) })
+	icon(cash, Config.Icons.Coin, 64, UDim2.fromOffset(8, 10), "$")
 	refs.Cash = label({ Size = UDim2.new(1, -84, 0, 44), Position = UDim2.fromOffset(78, 8), Text = "$0", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD, StrokeThickness = 3, Parent = cash })
 	refs.Income = label({ Size = UDim2.new(1, -84, 0, 24), Position = UDim2.fromOffset(78, 52), Text = "+$0/s", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GREEN, Parent = cash })
 
 	local eggs = panel({ Name = "Eggs", Size = UDim2.fromOffset(250, 58), LayoutOrder = 2, Parent = column }, Color3.fromRGB(150, 220, 255))
-	label({ Size = UDim2.fromOffset(44, 40), Position = UDim2.fromOffset(12, 9), Text = "🥚", Parent = eggs })
+	icon(eggs, Config.Icons.Egg, 48, UDim2.fromOffset(8, 5), "🥚")
 	refs.Eggs = label({ Size = UDim2.new(1, -72, 0, 36), Position = UDim2.fromOffset(62, 11), Text = "0 / 8 eggs", TextXAlignment = Enum.TextXAlignment.Left, Parent = eggs })
 
 	local speed = panel({ Name = "Speed", Size = UDim2.fromOffset(250, 76), LayoutOrder = 3, Parent = column }, Color3.fromRGB(110, 210, 255))
-	label({ Size = UDim2.fromOffset(44, 40), Position = UDim2.fromOffset(12, 8), Text = "⚡", Parent = speed })
+	icon(speed, Config.Icons.Speed, 46, UDim2.fromOffset(8, 3), "⚡")
 	refs.Speed = label({ Size = UDim2.new(1, -72, 0, 32), Position = UDim2.fromOffset(62, 8), Text = "Speed 20", TextXAlignment = Enum.TextXAlignment.Left, Parent = speed })
 	local bar = make("Frame", { Size = UDim2.new(1, -24, 0, 14), Position = UDim2.fromOffset(12, 52), BackgroundColor3 = Color3.fromRGB(14, 10, 30), Parent = speed }, { corner(7) }) :: Frame
 	refs.TrainingFill = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(110, 210, 255), Parent = bar }, { corner(7), gradient(Color3.fromRGB(120, 240, 255), Color3.fromRGB(60, 140, 255), 0) })
@@ -135,7 +144,14 @@ function Hud.Build(onShopAction: (string, number) -> (boolean, string))
 	local trailsButton = make("TextButton", {
 		Name = "TrailsButton", Size = UDim2.fromOffset(250, 58), LayoutOrder = 4, BackgroundColor3 = PINK, Text = "", AutoButtonColor = true, Parent = column,
 	}, { corner(16), stroke(Color3.new(1, 1, 1), 3, 0.2), gradient(Color3.fromRGB(255, 150, 220), Color3.fromRGB(220, 70, 180)) }) :: TextButton
-	label({ Size = UDim2.new(1, -20, 1, -14), Position = UDim2.fromOffset(10, 7), Text = "✨ TRAIL SHOP", Parent = trailsButton, StrokeThickness = 2.5 })
+	icon(trailsButton, Config.Icons.Trail, 48, UDim2.fromOffset(10, 5), "✨")
+	label({ Size = UDim2.new(1, -76, 1, -14), Position = UDim2.fromOffset(64, 7), Text = "TRAIL SHOP", Parent = trailsButton, StrokeThickness = 2.5 })
+
+	local musicButton = make("TextButton", {
+		Name = "MusicButton", Size = UDim2.fromOffset(250, 40), LayoutOrder = 5, BackgroundColor3 = Color3.fromRGB(70, 60, 130), Text = "", AutoButtonColor = true, Parent = column,
+	}, { corner(14), stroke(Color3.new(1, 1, 1), 2, 0.4) }) :: TextButton
+	refs.MusicText = label({ Size = UDim2.new(1, -20, 1, -12), Position = UDim2.fromOffset(10, 6), Text = "♪ MUSIC: ON", Parent = musicButton, StrokeThickness = 2 })
+	Hud.MusicButton = musicButton
 
 	refs.Save = label({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -10), Size = UDim2.fromOffset(330, 20), TextXAlignment = Enum.TextXAlignment.Left, Text = "", TextColor3 = Color3.fromRGB(200, 200, 230), Parent = gui, StrokeThickness = 1.5 })
 
@@ -146,6 +162,8 @@ function Hud.Build(onShopAction: (string, number) -> (boolean, string))
 
 	refs.Chase = panel({ Name = "Chase", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 96), Size = UDim2.fromOffset(460, 74), Visible = false, BackgroundColor3 = Color3.fromRGB(70, 10, 24), Parent = gui }, RED)
 	refs.ChaseText = label({ Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 6), Text = "", TextColor3 = Color3.fromRGB(255, 220, 220), Parent = refs.Chase, StrokeThickness = 3 })
+	local rageIcon = icon(refs.Chase, Config.Icons.Rage, 76, UDim2.new(0, -38, 0.5, -38), "")
+	rageIcon.ZIndex = 2
 	local rageBar = make("Frame", { Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(12, 46), BackgroundColor3 = Color3.fromRGB(20, 6, 12), Parent = refs.Chase }, { corner(8) }) :: Frame
 	refs.RageFill = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = RED, Parent = rageBar }, { corner(8), gradient(Color3.fromRGB(255, 200, 60), Color3.fromRGB(255, 40, 60), 0) })
 	refs.RageText = label({ Size = UDim2.fromScale(1, 1), Text = "", Parent = rageBar, StrokeThickness = 1.5 })
@@ -218,6 +236,10 @@ function Hud.BuildShop(onShopAction: (string, number) -> (boolean, string))
 		end)
 		shopCards[index] = { Button = button, Text = buttonText, Card = card }
 	end
+end
+
+function Hud.SetMusicLabel(on: boolean)
+	refs.MusicText.Text = if on then "♪ MUSIC: ON" else "♪ MUSIC: OFF"
 end
 
 function Hud.ToggleShop(open: boolean)

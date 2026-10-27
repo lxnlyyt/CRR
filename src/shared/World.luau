@@ -828,6 +828,30 @@ end
 
 local DECOR = { forest, desert, ice, lava, toxic, shadow }
 
+-- One big ForgeGUI-generated landmark per zone, across the path from the nest, facing the path.
+local function buildLandmark(f: Instance, index: number)
+	local info = Config.Zones[index].Landmark
+	if info.AssetId == 0 then
+		return
+	end
+	local ok, asset = pcall(function()
+		return game:GetService("InsertService"):LoadAsset(info.AssetId)
+	end)
+	local mesh = ok and asset:FindFirstChildWhichIsA("MeshPart", true)
+	if not mesh then
+		warn(string.format("[MonsterEgg] Landmark %d for %s could not load: %s", info.AssetId, Config.Zones[index].Name, tostring(asset)))
+		return
+	end
+	mesh.Name = "Landmark"
+	mesh.Size *= info.Height / mesh.Size.Y
+	mesh.Anchored = true
+	mesh.CanCollide = true
+	local position = Vector3.new(info.Spot.X, mesh.Size.Y / 2, Config.ZoneStart(index) + info.Spot.Y)
+	mesh.CFrame = CFrame.lookAt(position, Vector3.new(0, position.Y, position.Z - 25))
+	mesh.Parent = f
+	asset:Destroy()
+end
+
 -- Ambient particles per zone: falling leaves, drifting sand, snow, rising embers, bubbles, motes.
 local AMBIENT = {
 	{ Falling = true, Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = Color3.fromRGB(140, 230, 90), Rate = 18, Speed = NumberRange.new(2, 4), Size = 0.6 },
@@ -994,11 +1018,17 @@ local function buildZone(root: Instance, index: number)
 
 	local nest = Config.NestCenter(index)
 	local home = Config.GuardianHome(index).Position
-	keepClear = { Vector3.new(nest.X, nest.Z, 18), Vector3.new(home.X, home.Z, 16) }
+	local landmark = Config.Zones[index].Landmark
+	keepClear = {
+		Vector3.new(nest.X, nest.Z, 18),
+		Vector3.new(home.X, home.Z, 16),
+		Vector3.new(landmark.Spot.X, start + landmark.Spot.Y, landmark.Height * 0.7),
+	}
 	local decor = folder(f, "Decor")
 	DECOR[index](decor, Random.new(index * 97), start)
 	keepClear = {}
 	zoneDetails(decor, index, start)
+	buildLandmark(decor, index)
 	buildNest(f, index)
 	task.wait()
 	return f

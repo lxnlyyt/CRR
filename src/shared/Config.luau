@@ -66,13 +66,37 @@ Config.BaseColors = {
 	Color3.fromRGB(255, 145, 205),
 }
 
+-- Sound effects and music generated with ForgeGUI and published to the creator's Roblox account.
 Config.Sounds = {
-	Pickup = { Id = "rbxasset://sounds/action_get_up.mp3", Pitch = 1.6, Volume = 0.7 },
-	Bank = { Id = "rbxasset://sounds/action_jump_land.mp3", Pitch = 0.8, Volume = 1 },
-	Buy = { Id = "rbxasset://sounds/volume_slider.ogg", Pitch = 1.2, Volume = 1 },
-	Roar = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Pitch = 0.45, Volume = 0.8 },
-	Caught = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Pitch = 1.1, Volume = 0.6 },
-	Steal = { Id = "rbxasset://sounds/action_jump.mp3", Pitch = 1.4, Volume = 0.8 },
+	Pickup = { Id = "rbxassetid://70816746495935", Volume = 0.8 },
+	Bank = { Id = "rbxassetid://138197500459499", Volume = 0.9 },
+	Buy = { Id = "rbxassetid://119333597820380", Volume = 0.8 },
+	Roar = { Id = "rbxassetid://128210121110691", Volume = 1 },
+	Caught = { Id = "rbxassetid://123522285214631", Volume = 0.9 },
+	Steal = { Id = "rbxassetid://91124564703227", Volume = 0.8 },
+	LevelUp = { Id = "rbxassetid://127804802043960", Volume = 0.9 },
+}
+
+Config.Music = {
+	Volume = 0.3,
+	Sanctuary = "rbxassetid://88050341791687",
+	Zones = {
+		"rbxassetid://123352044620881", -- Forest
+		"rbxassetid://137680556724186", -- Desert
+		"rbxassetid://127572275830794", -- Ice
+		"rbxassetid://118189778938559", -- Lava
+		"rbxassetid://120719828334063", -- Toxic
+		"rbxassetid://133369860649713", -- Shadow
+	},
+}
+
+-- HUD icons generated with ForgeGUI (transparent PNGs published as Roblox images).
+Config.Icons = {
+	Coin = "rbxassetid://93798547146982",
+	Egg = "rbxassetid://113334298264334",
+	Speed = "rbxassetid://122080941241155",
+	Trail = "rbxassetid://123178772277358",
+	Rage = "rbxassetid://75951493333340",
 }
 
 export type Zone = {
@@ -93,6 +117,7 @@ export type Zone = {
 	MeshYaw: number, -- turns the mesh so its face looks down -Z
 	Height: number,
 	Nest: Vector2, -- nest position: X across the corridor, Y = depth into the zone
+	Landmark: { AssetId: number, Height: number, Spot: Vector2 }, -- ForgeGUI model (0 = none yet)
 }
 
 Config.Zones = {
@@ -103,6 +128,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(70, 178, 64), Fog = Color3.fromRGB(190, 236, 200),
 		Speed = 18, Income = 2, Reach = 8,
 		MeshId = "rbxassetid://100729813706841", TextureId = "rbxassetid://126990797373067", MeshYaw = 0, Height = 13, Nest = Vector2.new(-30, 70),
+		Landmark = { AssetId = 0, Height = 26, Spot = Vector2.new(44, 120) },
 	},
 	{
 		Name = "Desert", Monster = "Dune Gloop",
@@ -111,6 +137,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(250, 222, 150), Fog = Color3.fromRGB(255, 228, 180),
 		Speed = 23, Income = 6, Reach = 8,
 		MeshId = "rbxassetid://129056952654925", TextureId = "rbxassetid://118340515848657", MeshYaw = 0, Height = 12, Nest = Vector2.new(28, 100),
+		Landmark = { AssetId = 0, Height = 22, Spot = Vector2.new(-46, 88) },
 	},
 	{
 		Name = "Ice", Monster = "Frostgloop",
@@ -119,6 +146,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(245, 252, 255), Fog = Color3.fromRGB(205, 232, 255),
 		Speed = 28, Income = 15, Reach = 8.5,
 		MeshId = "rbxassetid://103432994982097", TextureId = "rbxassetid://123146596024982", MeshYaw = 0, Height = 14, Nest = Vector2.new(-26, 138),
+		Landmark = { AssetId = 97776129887795, Height = 30, Spot = Vector2.new(46, 45) },
 	},
 	{
 		Name = "Lava", Monster = "Magma Maw",
@@ -127,6 +155,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(255, 120, 40), Fog = Color3.fromRGB(255, 150, 110),
 		Speed = 33, Income = 40, Reach = 9,
 		MeshId = "rbxassetid://80319563283730", TextureId = "rbxassetid://112963067084381", MeshYaw = 0, Height = 14, Nest = Vector2.new(20, 92),
+		Landmark = { AssetId = 120889398323352, Height = 22, Spot = Vector2.new(-24, 150) },
 	},
 	{
 		Name = "Toxic", Monster = "Sludge King",
@@ -135,6 +164,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(150, 245, 60), Fog = Color3.fromRGB(170, 230, 120),
 		Speed = 38, Income = 100, Reach = 9,
 		MeshId = "rbxassetid://94540360805246", TextureId = "rbxassetid://116288831429704", MeshYaw = 0, Height = 15, Nest = Vector2.new(-30, 86),
+		Landmark = { AssetId = 78189333204811, Height = 24, Spot = Vector2.new(42, 85) },
 	},
 	{
 		Name = "Shadow", Monster = "Void Gloom",
@@ -143,6 +173,7 @@ Config.Zones = {
 		Trim = Color3.fromRGB(180, 100, 255), Fog = Color3.fromRGB(120, 80, 170),
 		Speed = 44, Income = 260, Reach = 9.5,
 		MeshId = "rbxassetid://123214066275963", TextureId = "rbxassetid://87795194151672", MeshYaw = math.pi / 2, Height = 13, Nest = Vector2.new(26, 124),
+		Landmark = { AssetId = 72214084210424, Height = 28, Spot = Vector2.new(-44, 125) },
 	},
 } :: { Zone }
 

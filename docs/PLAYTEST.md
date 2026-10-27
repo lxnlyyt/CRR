@@ -1,5 +1,13 @@
 # Studio verification — 2026-10-26 (v2 rebuild)
 
+## Update 2026-10-27: ForgeGUI audio, icons and landmarks (place ST, 77852204695857)
+
+- 7 sound effects and 7 music tracks were generated with ForgeGUI and published as Roblox Audio. The Desert and Ice tracks failed on the first try and succeeded on a retry. All 14 report `AssetFetchStatus.Success` in Play; the safe-zone music starts at volume 0.3.
+- 5 HUD icons were published as Roblox Images, are approved and are visible in the HUD screenshot. The treadmill icon generation stayed "running" and is unused.
+- 4 of 6 landmark models (Ice, Lava, Toxic, Shadow) were published as approved Roblox Models and load at map build. Forest and Desert stayed "running" at ForgeGUI and are not in the game yet (`AssetId = 0`).
+- `tests/StudioSmoke.luau`: **107 of 107 checks passed** on ST. No game errors in the log; the only warning (asset 203785492) comes from the Ro-Defender plugin.
+- Security: ST also contained the obfuscated `Workspace.Terrain.Converter` backdoor; it was removed with the owner's approval. The Studio plugin 5608087464 (a GUI-to-Lua converter) contains a script with the same name and is the likely source; the owner should uninstall it and republish ST.
+
 ## Update: personal bases and treadmills
 
 The sanctuary was rebuilt with seven personal bases (max 7 players). Each has its own spawn pad, egg pen and treadmill, and the treadmills upgrade from level 1 to 15, each with its own design and +1.2 walk speed per level. The plaza gained a fountain and props; the zones gained wall decor and ambient particles.

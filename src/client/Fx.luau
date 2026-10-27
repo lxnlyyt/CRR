@@ -110,7 +110,7 @@ function Fx.Sound(name: string, at: Instance?)
 	end
 	local sound = Instance.new("Sound")
 	sound.SoundId = info.Id
-	sound.PlaybackSpeed = info.Pitch
+	sound.PlaybackSpeed = info.Pitch or 1
 	sound.Volume = info.Volume
 	if at then
 		sound.RollOffMaxDistance = 260
@@ -248,6 +248,63 @@ function Fx.Knockback(from: Vector3)
 	end)
 end
 
+-- Music: one looping track per zone, cross-faded when you change zone ----------------
+
+local musicTracks: { [string]: Sound } = {}
+local currentTrack: Sound? = nil
+local musicEnabled = true
+
+local function musicTrack(id: string): Sound?
+	if not id:match("^rbxassetid://%d+$") then
+		return nil
+	end
+	local sound = musicTracks[id]
+	if not sound then
+		local s = Instance.new("Sound")
+		s.Name = "ZoneMusic"
+		s.SoundId = id
+		s.Looped = true
+		s.Volume = 0
+		s.Parent = game:GetService("SoundService")
+		musicTracks[id] = s
+		sound = s
+	end
+	return sound
+end
+
+function Fx.PlayMusic(zone: number)
+	local id = if zone == 0 then Config.Music.Sanctuary else Config.Music.Zones[zone]
+	local nextTrack = id and musicTrack(id)
+	if nextTrack == currentTrack then
+		return
+	end
+	local fade = TweenInfo.new(1.5, Enum.EasingStyle.Quad)
+	local previous = currentTrack
+	if previous then
+		local out = TweenService:Create(previous, fade, { Volume = 0 })
+		out.Completed:Once(function()
+			if currentTrack ~= previous then
+				previous:Pause()
+			end
+		end)
+		out:Play()
+	end
+	currentTrack = nextTrack
+	if nextTrack then
+		if not nextTrack.IsPlaying then
+			nextTrack:Play()
+		end
+		TweenService:Create(nextTrack, fade, { Volume = if musicEnabled then Config.Music.Volume else 0 }):Play()
+	end
+end
+
+function Fx.SetMusicEnabled(enabled: boolean)
+	musicEnabled = enabled
+	if currentTrack then
+		TweenService:Create(currentTrack, TweenInfo.new(0.4), { Volume = if enabled then Config.Music.Volume else 0 }):Play()
+	end
+end
+
 -- Zone ambience ---------------------------------------------------------------------
 
 local SANCTUARY_FOG = Color3.fromRGB(200, 230, 255)
@@ -266,6 +323,7 @@ function Fx.SetZone(index: number)
 		TweenService:Create(cc, info, { TintColor = tint }):Play()
 	end
 	TweenService:Create(Lighting, info, { ClockTime = if index == 6 then 18.6 elseif index >= 4 then 16.5 else 14.2 }):Play()
+	Fx.PlayMusic(index)
 end
 
 return Fx

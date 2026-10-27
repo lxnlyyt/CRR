@@ -27,6 +27,12 @@ Hud.Build(function(action, index)
 	return result, message
 end)
 Fx.Init(world)
+local musicOn = true
+Hud.MusicButton.Activated:Connect(function()
+	musicOn = not musicOn
+	Fx.SetMusicEnabled(musicOn)
+	Hud.SetMusicLabel(musicOn)
+end)
 
 -- Remotes ---------------------------------------------------------------------------
 
@@ -81,8 +87,7 @@ end
 
 function effects.TreadUp(level: number)
 	local design = Config.TreadmillDesigns[level]
-	Fx.Sound("Buy")
-	Fx.Sound("Bank")
+	Fx.Sound("LevelUp")
 	Fx.Burst(design.Accent, 80, 1.6)
 	Fx.Shake(0.6, 0.3)
 	Hud.Splash("TREADMILL LV " .. level .. "!", design.Name .. " design  •  +" .. Config.TreadSpeedPerLevel .. " walk speed", design.Accent)
