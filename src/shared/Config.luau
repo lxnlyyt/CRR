@@ -97,6 +97,10 @@ Config.Icons = {
 	Speed = "rbxassetid://122080941241155",
 	Trail = "rbxassetid://123178772277358",
 	Rage = "rbxassetid://75951493333340",
+	Shop = "SHOP_ICON",
+	Index = "rbxassetid://116639459091707",
+	Rewards = "REWARDS_ICON",
+	Settings = "SETTINGS_ICON",
 }
 
 export type Zone = {
@@ -192,16 +196,39 @@ Config.Rarities = {
 Config.RageRarity = 4 -- Epic and above enrage the guardian
 Config.ChargeRarity = 5 -- Legendary and above add charge dashes
 
-export type Trail = { Name: string, Cost: number, Multiplier: number, Colors: { Color3 } }
+export type Trail = {
+	Name: string,
+	Rarity: string, -- matches a Config.Rarities name, used for the card colours
+	Cost: number,
+	Multiplier: number,
+	Colors: { Color3 },
+	Robux: number, -- display price; the real price comes from the developer product
+	ProductId: number, -- Roblox developer product id (0 = Robux purchase not set up yet)
+}
 
 Config.Trails = {
-	{ Name = "Mint", Cost = 250, Multiplier = 1.1, Colors = { Color3.fromRGB(120, 255, 200), Color3.fromRGB(60, 210, 160) } },
-	{ Name = "Ocean", Cost = 1500, Multiplier = 1.2, Colors = { Color3.fromRGB(80, 200, 255), Color3.fromRGB(40, 90, 255) } },
-	{ Name = "Prism", Cost = 8000, Multiplier = 1.3, Colors = { Color3.fromRGB(255, 90, 200), Color3.fromRGB(90, 220, 255) } },
-	{ Name = "Solar", Cost = 40000, Multiplier = 1.45, Colors = { Color3.fromRGB(255, 230, 80), Color3.fromRGB(255, 110, 40) } },
-	{ Name = "Void", Cost = 200000, Multiplier = 1.6, Colors = { Color3.fromRGB(190, 100, 255), Color3.fromRGB(30, 10, 60) } },
-	{ Name = "Divine", Cost = 1000000, Multiplier = 1.8, Colors = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 200, 240) } },
+	{ Name = "Mint", Rarity = "Common", Cost = 250, Multiplier = 1.1, Robux = 25, ProductId = 0, Colors = { Color3.fromRGB(120, 255, 200), Color3.fromRGB(60, 210, 160) } },
+	{ Name = "Ocean", Rarity = "Uncommon", Cost = 1500, Multiplier = 1.2, Robux = 49, ProductId = 0, Colors = { Color3.fromRGB(80, 200, 255), Color3.fromRGB(40, 90, 255) } },
+	{ Name = "Prism", Rarity = "Rare", Cost = 8000, Multiplier = 1.3, Robux = 99, ProductId = 0, Colors = { Color3.fromRGB(255, 90, 200), Color3.fromRGB(90, 220, 255) } },
+	{ Name = "Solar", Rarity = "Epic", Cost = 40000, Multiplier = 1.45, Robux = 199, ProductId = 0, Colors = { Color3.fromRGB(255, 230, 80), Color3.fromRGB(255, 110, 40) } },
+	{ Name = "Void", Rarity = "Legendary", Cost = 200000, Multiplier = 1.6, Robux = 399, ProductId = 0, Colors = { Color3.fromRGB(190, 100, 255), Color3.fromRGB(30, 10, 60) } },
+	{ Name = "Divine", Rarity = "Divine", Cost = 1000000, Multiplier = 1.8, Robux = 799, ProductId = 0, Colors = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 200, 240) } },
 } :: { Trail }
+
+function Config.RarityInfo(name: string): Rarity
+	for _, rarity in Config.Rarities do
+		if rarity.Name == name then
+			return rarity
+		end
+	end
+	return Config.Rarities[1]
+end
+
+-- Free gift from the Rewards menu.
+Config.RewardCooldown = 15 * 60
+function Config.RewardCash(incomePerSecond: number): number
+	return math.max(500, math.floor(incomePerSecond * 120))
+end
 
 function Config.SpeedCost(level: number): number
 	return math.floor(60 * (level + 1) ^ 2.1)

@@ -11,5 +11,6 @@ $GameSources = @(
     @{ Path = 'src/server/Guardians.luau';     Parent = 'ServerScriptService.MonsterEggServer';                   Name = 'Guardians';        Class = 'ModuleScript' },
     @{ Path = 'src/client/init.client.luau';   Parent = 'StarterPlayer.StarterPlayerScripts';                     Name = 'MonsterEggClient'; Class = 'LocalScript' },
     @{ Path = 'src/client/Hud.luau';           Parent = 'StarterPlayer.StarterPlayerScripts.MonsterEggClient';    Name = 'Hud';              Class = 'ModuleScript' },
+    @{ Path = 'src/client/HudBuilder.luau';    Parent = 'StarterPlayer.StarterPlayerScripts.MonsterEggClient';    Name = 'HudBuilder';       Class = 'ModuleScript' },
     @{ Path = 'src/client/Fx.luau';            Parent = 'StarterPlayer.StarterPlayerScripts.MonsterEggClient';    Name = 'Fx';               Class = 'ModuleScript' }
 )

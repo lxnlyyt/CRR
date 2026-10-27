@@ -147,6 +147,13 @@ qa:Invoke("Purchase", player, "Speed")
 qa:Invoke("Purchase", player, "Storage")
 check("Speed upgrade", player:GetAttribute("SpeedLevel") == speed + 1)
 check("Storage upgrade", player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
+check("HUD Upgrade button buys speed", (qa:Invoke("Shop", player, { Action = "Upgrade", Index = "Speed" })) and player:GetAttribute("SpeedLevel") == speed + 2)
+capacity += Config.CapacityStep
+check("HUD Upgrade button buys storage", (qa:Invoke("Shop", player, { Action = "Upgrade", Index = "Storage" })) and player:GetAttribute("Capacity") == capacity + Config.CapacityStep)
+
+local giftCash = player:GetAttribute("Cash")
+check("Free gift can be claimed", (qa:Invoke("Shop", player, { Action = "Claim", Index = 0 })) and player:GetAttribute("Cash") > giftCash)
+check("Free gift starts its cooldown", not (qa:Invoke("Shop", player, { Action = "Claim", Index = 0 })) and player:GetAttribute("NextReward") > os.time())
 
 local walk = character().Humanoid.WalkSpeed
 check("Buy Mint trail", (qa:Invoke("Shop", player, { Action = "Buy", Index = 1 })))

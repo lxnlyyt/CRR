@@ -13,6 +13,7 @@ FILES = {
     "ServerScriptService.MonsterEggServer.Guardians": "src/server/Guardians.luau",
     "StarterPlayer.StarterPlayerScripts.MonsterEggClient": "src/client/init.client.luau",
     "StarterPlayer.StarterPlayerScripts.MonsterEggClient.Hud": "src/client/Hud.luau",
+    "StarterPlayer.StarterPlayerScripts.MonsterEggClient.HudBuilder": "src/client/HudBuilder.luau",
     "StarterPlayer.StarterPlayerScripts.MonsterEggClient.Fx": "src/client/Fx.luau",
 }
 

@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("MonsterEgg")
@@ -96,6 +97,7 @@ local function sync(player: Player)
 	player:SetAttribute("TreadLevel", profile.TreadLevel)
 	player:SetAttribute("Trail", profile.Trail)
 	player:SetAttribute("OwnedTrails", table.concat(profile.Trails, ","))
+	player:SetAttribute("NextReward", profile.LastReward + Config.RewardCooldown)
 	local walk = Config.WalkSpeed(profile.SpeedLevel, profile.Training, profile.Trail, profile.TreadLevel)
 	player:SetAttribute("WalkSpeed", walk)
 	local stats = player:FindFirstChild("leaderstats")
@@ -499,9 +501,45 @@ shopPrompt.Triggered:Connect(function(player)
 	EffectEvent:FireClient(player, "OpenShop")
 end)
 
+local function claimReward(player: Player, profile: Data.Profile): (boolean, string)
+	local now = os.time()
+	local remaining = profile.LastReward + Config.RewardCooldown - now
+	if remaining > 0 then
+		return false, string.format("Next gift in %d:%02d", remaining // 60, remaining % 60)
+	end
+	local amount = Config.RewardCash(incomeOf(profile))
+	profile.LastReward = now
+	profile.Cash += amount
+	EffectEvent:FireClient(player, "Purchase")
+	sync(player)
+	return true, "+$" .. Config.Format(amount) .. " free gift!"
+end
+
+local function upgrade(player: Player, profile: Data.Profile, kind: any): (boolean, string)
+	local before = profile.SpeedLevel + profile.Capacity
+	if kind == "Speed" then
+		purchases.Speed(player, profile)
+	elseif kind == "Storage" then
+		purchases.Storage(player, profile)
+	else
+		return false, "Invalid request"
+	end
+	sync(player)
+	local ok = profile.SpeedLevel + profile.Capacity ~= before
+	return ok, if ok then kind .. " upgraded!" else "Upgrade failed"
+end
+
 local function handleShop(player: Player, action: any, index: any): (boolean, string)
 	local profile = profiles[player]
-	if not profile or type(index) ~= "number" or not Config.Trails[index] then
+	if not profile then
+		return false, "Still loading — try again"
+	end
+	if action == "Claim" then
+		return claimReward(player, profile)
+	elseif action == "Upgrade" then
+		return upgrade(player, profile, index)
+	end
+	if type(index) ~= "number" or not Config.Trails[index] then
 		return false, "Invalid request"
 	end
 	if action == "Buy" then
@@ -526,6 +564,30 @@ local function handleShop(player: Player, action: any, index: any): (boolean, st
 	return true, if profile.Trail == index then Config.Trails[index].Name .. " trail equipped!" else "Trail unequipped"
 end
 ShopFunction.OnServerInvoke = handleShop
+
+-- Robux trails: each trail can have a developer product (Config.Trails[i].ProductId).
+MarketplaceService.ProcessReceipt = function(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	local profile = player and profiles[player]
+	if not player or not profile then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	for index, trail in Config.Trails do
+		if trail.ProductId ~= 0 and trail.ProductId == receipt.ProductId then
+			if not ownsTrail(profile, index) then
+				table.insert(profile.Trails, index)
+			end
+			profile.Trail = index
+			applyTrail(player)
+			sync(player)
+			EffectEvent:FireClient(player, "Purchase")
+			notice(player, trail.Name .. " trail unlocked with Robux!", "rare")
+			task.spawn(Data.Save, player, profile, false)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
 
 -- Players ----------------------------------------------------------------------------
 

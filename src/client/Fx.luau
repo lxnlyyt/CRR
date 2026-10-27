@@ -101,11 +101,35 @@ function Fx.Step(t: number, dt: number)
 	camera.FieldOfView += (targetFov - camera.FieldOfView) * math.min(dt * 4, 1)
 end
 
+-- Player settings (from the HUD Settings window) -------------------------------------
+
+local options = { Sounds = true, Shake = true, Particles = true }
+
+-- Ambient zone particles are part of the shared map, so they are only switched off locally.
+local function setAmbient(enabled: boolean)
+	local world = Workspace:FindFirstChild("MonsterEggEscape")
+	if not world then
+		return
+	end
+	for _, item in world:GetDescendants() do
+		if item:IsA("ParticleEmitter") and item.Name == "Ambient" then
+			item.Enabled = enabled
+		end
+	end
+end
+
+function Fx.SetOption(name: string, enabled: boolean)
+	options[name] = enabled
+	if name == "Particles" then
+		setAmbient(enabled)
+	end
+end
+
 -- Sounds ---------------------------------------------------------------------------
 
 function Fx.Sound(name: string, at: Instance?)
 	local info = Config.Sounds[name]
-	if not info then
+	if not info or not options.Sounds then
 		return
 	end
 	local sound = Instance.new("Sound")
@@ -128,6 +152,9 @@ function Fx.Sound(name: string, at: Instance?)
 end
 
 function Fx.Shake(strength: number, duration: number)
+	if not options.Shake then
+		return
+	end
 	local now = os.clock()
 	if now + duration > shake.Until or strength > shake.Strength then
 		shake.Strength = math.max(strength, if now < shake.Until then shake.Strength else 0)
@@ -142,7 +169,7 @@ end
 
 function Fx.Burst(color: Color3, count: number, size: number?)
 	local root = rootPart()
-	if not root then
+	if not root or not options.Particles then
 		return
 	end
 	local attachment = Instance.new("Attachment")

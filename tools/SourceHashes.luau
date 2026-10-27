@@ -11,6 +11,7 @@ local paths = {
 	"ServerScriptService.MonsterEggServer.Guardians",
 	"StarterPlayer.StarterPlayerScripts.MonsterEggClient",
 	"StarterPlayer.StarterPlayerScripts.MonsterEggClient.Hud",
+	"StarterPlayer.StarterPlayerScripts.MonsterEggClient.HudBuilder",
 	"StarterPlayer.StarterPlayerScripts.MonsterEggClient.Fx",
 }
 local out = {}

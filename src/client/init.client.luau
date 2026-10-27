@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Shared = ReplicatedStorage:WaitForChild("MonsterEgg")
 local Config = require(Shared:WaitForChild("Config"))
@@ -19,20 +20,36 @@ local ShopFunction = Remotes:WaitForChild("Shop") :: RemoteFunction
 local NoticeEvent = Remotes:WaitForChild("Notice") :: RemoteEvent
 local EffectEvent = Remotes:WaitForChild("Effect") :: RemoteEvent
 
-Hud.Build(function(action, index)
+local function invokeShop(action: string, index: any): (boolean, string)
 	local ok, result, message = pcall(ShopFunction.InvokeServer, ShopFunction, action, index)
 	if not ok then
 		return false, "Shop is busy — try again"
 	end
 	return result, message
-end)
+end
+
+Hud.Build({
+	Shop = invokeShop,
+	Robux = function(index: number)
+		local trail = Config.Trails[index]
+		if trail and trail.ProductId > 0 then
+			MarketplaceService:PromptProductPurchase(player, trail.ProductId)
+		else
+			Hud.Toast("Robux purchases are not set up yet", "info")
+		end
+	end,
+	Claim = function()
+		return invokeShop("Claim", 0)
+	end,
+	Setting = function(name: string, enabled: boolean)
+		if name == "Music" then
+			Fx.SetMusicEnabled(enabled)
+		else
+			Fx.SetOption(name, enabled)
+		end
+	end,
+})
 Fx.Init(world)
-local musicOn = true
-Hud.MusicButton.Activated:Connect(function()
-	musicOn = not musicOn
-	Fx.SetMusicEnabled(musicOn)
-	Hud.SetMusicLabel(musicOn)
-end)
 
 -- Remotes ---------------------------------------------------------------------------
 

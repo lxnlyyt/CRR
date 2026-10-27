@@ -37,6 +37,7 @@ export type Profile = {
 	Eggs: { Egg },
 	Stats: { Banked: number, Stolen: number, Caught: number },
 	LastSeen: number,
+	LastReward: number, -- os.time() of the last free gift claim
 	-- Runtime only
 	Persistent: boolean?,
 	Saving: boolean?,
@@ -54,6 +55,7 @@ function Data.Default(): Profile
 		Eggs = {},
 		Stats = { Banked = 0, Stolen = 0, Caught = 0 },
 		LastSeen = 0,
+		LastReward = 0,
 	}
 end
 
@@ -96,6 +98,7 @@ local function payload(profile: Profile)
 		Eggs = table.clone(profile.Eggs),
 		Stats = table.clone(profile.Stats),
 		LastSeen = os.time(),
+		LastReward = profile.LastReward,
 	}
 end
 
