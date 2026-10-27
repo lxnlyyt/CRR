@@ -38,6 +38,8 @@ export type Profile = {
 	Stats: { Banked: number, Stolen: number, Caught: number },
 	LastSeen: number,
 	LastReward: number, -- os.time() of the last free gift claim
+	BonusSpeed: number, -- permanent walk speed from Robux speed packs
+	Receipts: { string }, -- recent developer product PurchaseIds, so a receipt is never granted twice
 	-- Runtime only
 	Persistent: boolean?,
 	Saving: boolean?,
@@ -56,6 +58,8 @@ function Data.Default(): Profile
 		Stats = { Banked = 0, Stolen = 0, Caught = 0 },
 		LastSeen = 0,
 		LastReward = 0,
+		BonusSpeed = 0,
+		Receipts = {},
 	}
 end
 
@@ -99,6 +103,8 @@ local function payload(profile: Profile)
 		Stats = table.clone(profile.Stats),
 		LastSeen = os.time(),
 		LastReward = profile.LastReward,
+		BonusSpeed = profile.BonusSpeed,
+		Receipts = table.clone(profile.Receipts),
 	}
 end
 

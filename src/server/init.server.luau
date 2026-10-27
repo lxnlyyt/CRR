@@ -50,6 +50,8 @@ local carried: { [Player]: Carried } = {}
 local bases: { [Player]: Model } = {}
 local guardians = {}
 local rng = Random.new()
+local refreshBaseProps: (Player) -> ()
+local clearBaseProps: (Model) -> ()
 
 -- Helpers ----------------------------------------------------------------------
 
@@ -98,8 +100,9 @@ local function sync(player: Player)
 	player:SetAttribute("Trail", profile.Trail)
 	player:SetAttribute("OwnedTrails", table.concat(profile.Trails, ","))
 	player:SetAttribute("NextReward", profile.LastReward + Config.RewardCooldown)
-	local walk = Config.WalkSpeed(profile.SpeedLevel, profile.Training, profile.Trail, profile.TreadLevel)
+	local walk = Config.WalkSpeed(profile.SpeedLevel, profile.Training, profile.Trail, profile.TreadLevel, profile.BonusSpeed)
 	player:SetAttribute("WalkSpeed", walk)
+	player:SetAttribute("BonusSpeed", profile.BonusSpeed)
 	local stats = player:FindFirstChild("leaderstats")
 	if stats then
 		local cashValue = stats:FindFirstChild("Cash") :: IntValue
@@ -109,8 +112,9 @@ local function sync(player: Player)
 	end
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
-		humanoid.WalkSpeed = walk
+		humanoid.WalkSpeed = if player:GetAttribute("SlowMode") then Config.BaseWalkSpeed else walk
 	end
+	refreshBaseProps(player)
 end
 
 local function applyTrail(player: Player)
@@ -188,6 +192,9 @@ local function redrawBase(player: Player)
 			Parent = eggsFolder,
 		})
 		model:SetAttribute("Slot", slot)
+		local earning = Style.Label(model.PrimaryPart :: BasePart, "+$" .. Config.Format(Config.EggIncome(egg.Z, egg.R)) .. "/s", Color3.fromRGB(120, 255, 90), 4, 1.1, 2.4)
+		earning.Name = "Earning"
+		earning.MaxDistance = 60
 		local prompt = Style.Prompt(model.PrimaryPart :: BasePart, "Sell $" .. Config.Format(Config.EggIncome(egg.Z, egg.R) * Config.SellSeconds), Eggs.Title(egg.Z, egg.R), 0.8, 7)
 		prompt.Name = "SellPrompt"
 		prompt.Enabled = false -- the owner's client enables its own sell prompts
@@ -229,6 +236,7 @@ local function releaseBase(player: Player)
 	setIncomeLabel(base, "Free base")
 	bases[player] = nil
 	refreshTreadmill(base, nil)
+	clearBaseProps(base)
 end
 
 sellEgg = function(player: Player, slot: number)
@@ -501,6 +509,144 @@ shopPrompt.Triggered:Connect(function(player)
 	EffectEvent:FireClient(player, "OpenShop")
 end)
 
+-- Base props: sell stall (sell every egg), fuse machine and the treadmill upgrade board ----
+
+local function sellAll(player: Player, profile: Data.Profile): (boolean, string)
+	if #profile.Eggs == 0 then
+		return false, "No eggs to sell"
+	end
+	local value = 0
+	for _, egg in profile.Eggs do
+		value += Config.EggIncome(egg.Z, egg.R) * Config.SellSeconds
+	end
+	local count = #profile.Eggs
+	table.clear(profile.Eggs)
+	profile.Cash += value
+	redrawBase(player)
+	sync(player)
+	EffectEvent:FireClient(player, "Cash", value)
+	local message = string.format("Sold %d eggs for $%s", count, Config.Format(value))
+	notice(player, message, "good")
+	return true, message
+end
+
+-- Lowest rarity (below the top one) that has enough eggs to fuse, and how many eggs the best candidate has.
+local function fuseCandidate(profile: Data.Profile): (number?, number)
+	local counts = {}
+	for _, egg in profile.Eggs do
+		counts[egg.R] = (counts[egg.R] or 0) + 1
+	end
+	local best = 0
+	for rarity = 1, #Config.Rarities - 1 do
+		local count = counts[rarity] or 0
+		if count >= Config.FuseCount then
+			return rarity, count
+		end
+		best = math.max(best, count)
+	end
+	return nil, best
+end
+
+local function fuse(player: Player, profile: Data.Profile): (boolean, string)
+	local rarity = fuseCandidate(profile)
+	if not rarity then
+		return false, "Need " .. Config.FuseCount .. " eggs of the same rarity"
+	end
+	local zone, removed = 1, 0
+	for slot = #profile.Eggs, 1, -1 do
+		local egg = profile.Eggs[slot]
+		if egg.R == rarity and removed < Config.FuseCount then
+			zone = math.max(zone, egg.Z)
+			table.remove(profile.Eggs, slot)
+			removed += 1
+		end
+	end
+	table.insert(profile.Eggs, { Z = zone, R = rarity + 1 })
+	redrawBase(player)
+	sync(player)
+	local result = Config.Rarities[rarity + 1]
+	EffectEvent:FireClient(player, "Fused", rarity + 1)
+	local article = if result.Name:match("^[AEIOU]") then "an" else "a"
+	local message = string.format("Fused %d %s eggs into %s %s egg!", Config.FuseCount, Config.Rarities[rarity].Name, article, result.Name)
+	notice(player, message, "rare")
+	return true, message
+end
+
+local function setBoard(base: Model, levels: string, cash: string, robux: string)
+	local board = base:FindFirstChild("UpgradeBoard")
+	local screen = board and board.Board:FindFirstChild("Screen")
+	if screen then
+		screen.Levels.Text = levels
+		screen.CashButton.Label.Text = cash
+		screen.RobuxButton.Label.Text = robux
+	end
+end
+
+refreshBaseProps = function(player: Player)
+	local base, profile = bases[player], profiles[player]
+	if not base or not profile then
+		return
+	end
+	local level = profile.TreadLevel
+	if level >= Config.MaxTreadLevel then
+		setBoard(base, "MAX LEVEL " .. level, "MAXED", "MAXED")
+	else
+		setBoard(base, string.format("Level %d > Level %d", level, level + 1), "$" .. Config.Format(Config.TreadCost(level)), "R$ " .. Config.TreadRobuxPrice(level))
+	end
+	local treadmill = base:FindFirstChild("Treadmill")
+	local step = treadmill and treadmill.Console:FindFirstChild("StepLabel")
+	if step then
+		step.Text.Text = "+$" .. Config.Format(Config.TreadCash(level, profile.SpeedLevel)) .. "/step"
+	end
+	local machine = base:FindFirstChild("FuseMachine")
+	if machine then
+		local rarity, count = fuseCandidate(profile)
+		machine.Body.Count.Text.Text = if rarity then "READY!" else string.format("%d/%d", count, Config.FuseCount)
+	end
+end
+
+clearBaseProps = function(base: Model)
+	setBoard(base, "Free base", "-", "-")
+	local machine = base:FindFirstChild("FuseMachine")
+	if machine then
+		machine.Body.Count.Text.Text = "0/" .. Config.FuseCount
+	end
+end
+
+-- One prompt per base prop; only the owner's client enables its own.
+for _, base in sanctuary.Bases:GetChildren() do
+	local function ownerOf(): Player?
+		for player, owned in bases do
+			if owned == base then
+				return player
+			end
+		end
+		return nil
+	end
+	local stall = base:WaitForChild("SellStall").Counter
+	local sellPrompt = Style.Prompt(stall, "Sell all eggs", "Sell", 0.5, 10)
+	sellPrompt.Name = "SellAllPrompt"
+	sellPrompt.Enabled = false
+	sellPrompt.Triggered:Connect(function(who)
+		local profile = profiles[who]
+		if profile and ownerOf() == who then
+			sellAll(who, profile)
+		end
+	end)
+	local machine = base:WaitForChild("FuseMachine").Body
+	local fusePrompt = Style.Prompt(machine, "Fuse " .. Config.FuseCount .. " eggs", "Fuse Machine", 0.6, 10)
+	fusePrompt.Name = "FusePrompt"
+	fusePrompt.Enabled = false
+	fusePrompt.Triggered:Connect(function(who)
+		local profile = profiles[who]
+		if profile and ownerOf() == who then
+			local _, message = fuse(who, profile)
+			notice(who, message, "info")
+		end
+	end)
+	clearBaseProps(base :: Model)
+end
+
 local function claimReward(player: Player, profile: Data.Profile): (boolean, string)
 	local now = os.time()
 	local remaining = profile.LastReward + Config.RewardCooldown - now
@@ -516,16 +662,18 @@ local function claimReward(player: Player, profile: Data.Profile): (boolean, str
 end
 
 local function upgrade(player: Player, profile: Data.Profile, kind: any): (boolean, string)
-	local before = profile.SpeedLevel + profile.Capacity
+	local before = profile.SpeedLevel + profile.Capacity + profile.TreadLevel
 	if kind == "Speed" then
 		purchases.Speed(player, profile)
 	elseif kind == "Storage" then
 		purchases.Storage(player, profile)
+	elseif kind == "Treadmill" then
+		purchases.Treadmill(player, profile)
 	else
 		return false, "Invalid request"
 	end
 	sync(player)
-	local ok = profile.SpeedLevel + profile.Capacity ~= before
+	local ok = profile.SpeedLevel + profile.Capacity + profile.TreadLevel ~= before
 	return ok, if ok then kind .. " upgraded!" else "Upgrade failed"
 end
 
@@ -538,6 +686,14 @@ local function handleShop(player: Player, action: any, index: any): (boolean, st
 		return claimReward(player, profile)
 	elseif action == "Upgrade" then
 		return upgrade(player, profile, index)
+	elseif action == "SlowMode" then
+		player:SetAttribute("SlowMode", index == true)
+		sync(player)
+		return true, if index == true then "Slow mode on" else "Slow mode off"
+	elseif action == "SellAll" then
+		return sellAll(player, profile)
+	elseif action == "Fuse" then
+		return fuse(player, profile)
 	end
 	if type(index) ~= "number" or not Config.Trails[index] then
 		return false, "Invalid request"
@@ -565,28 +721,80 @@ local function handleShop(player: Player, action: any, index: any): (boolean, st
 end
 ShopFunction.OnServerInvoke = handleShop
 
--- Robux trails: each trail can have a developer product (Config.Trails[i].ProductId).
+-- Robux developer products: trails, cash packs, speed packs and treadmill levels -------------
+
+local function grantProduct(player: Player, profile: Data.Profile, kind: string, index: number): string
+	if kind == "Trail" then
+		local trail = Config.Trails[index]
+		if not ownsTrail(profile, index) then
+			table.insert(profile.Trails, index)
+		end
+		profile.Trail = index
+		applyTrail(player)
+		return trail.Name .. " trail unlocked!"
+	elseif kind == "Cash" then
+		local amount = Config.CashPacks[index].Amount
+		profile.Cash += amount
+		EffectEvent:FireClient(player, "Cash", amount)
+		return "+$" .. Config.Format(amount) .. " added!"
+	elseif kind == "Speed" then
+		local amount = Config.SpeedPacks[index].Amount
+		profile.BonusSpeed += amount
+		return "+" .. amount .. " speed forever!"
+	else
+		if profile.TreadLevel >= Config.MaxTreadLevel then
+			-- Already maxed (bought twice quickly): pay out the last level's cash price instead.
+			profile.Cash += Config.TreadCost(Config.MaxTreadLevel - 1)
+			return "Treadmill already maxed — cash added instead"
+		end
+		profile.TreadLevel += 1
+		local base = bases[player]
+		if base then
+			refreshTreadmill(base, player)
+		end
+		EffectEvent:FireClient(player, "TreadUp", profile.TreadLevel)
+		return "Treadmill upgraded to level " .. profile.TreadLevel .. "!"
+	end
+end
+
+local function findProduct(productId: number): (string?, number)
+	for _, kind in { "Trail", "Cash", "Speed" } do
+		local list = if kind == "Trail" then Config.Trails elseif kind == "Cash" then Config.CashPacks else Config.SpeedPacks
+		for index in list do
+			if Config.ProductFor(kind, index) == productId then
+				return kind, index
+			end
+		end
+	end
+	if Config.ProductFor("Tread") == productId then
+		return "Tread", 0
+	end
+	return nil, 0
+end
+
 MarketplaceService.ProcessReceipt = function(receipt)
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local profile = player and profiles[player]
 	if not player or not profile then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
-	for index, trail in Config.Trails do
-		if trail.ProductId ~= 0 and trail.ProductId == receipt.ProductId then
-			if not ownsTrail(profile, index) then
-				table.insert(profile.Trails, index)
-			end
-			profile.Trail = index
-			applyTrail(player)
-			sync(player)
-			EffectEvent:FireClient(player, "Purchase")
-			notice(player, trail.Name .. " trail unlocked with Robux!", "rare")
-			task.spawn(Data.Save, player, profile, false)
-			return Enum.ProductPurchaseDecision.PurchaseGranted
-		end
+	if table.find(profile.Receipts, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	return Enum.ProductPurchaseDecision.NotProcessedYet
+	local kind, index = findProduct(receipt.ProductId)
+	if not kind or receipt.ProductId == 0 then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local message = grantProduct(player, profile, kind, index)
+	table.insert(profile.Receipts, receipt.PurchaseId)
+	while #profile.Receipts > 50 do
+		table.remove(profile.Receipts, 1)
+	end
+	sync(player)
+	EffectEvent:FireClient(player, "Purchase")
+	notice(player, message, "rare")
+	task.spawn(Data.Save, player, profile, false)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
 -- Players ----------------------------------------------------------------------------
@@ -827,6 +1035,15 @@ if RunService:IsStudio() then
 			return profile.TreadLevel
 		elseif action == "Shop" then
 			return handleShop(player, arg.Action, arg.Index)
+		elseif action == "Product" then
+			local message = grantProduct(player, profile, arg.Kind, arg.Index)
+			sync(player)
+			return message
+		elseif action == "SetEggs" then
+			profile.Eggs = arg
+			redrawBase(player)
+			sync(player)
+			return #profile.Eggs
 		end
 		error("Unknown QA action " .. tostring(action))
 	end

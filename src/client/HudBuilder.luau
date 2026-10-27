@@ -28,6 +28,9 @@ Builder.Colors = {
 	Teal = { Color3.fromRGB(120, 255, 220), Color3.fromRGB(20, 160, 150) },
 	Grey = { Color3.fromRGB(170, 170, 185), Color3.fromRGB(95, 95, 115) },
 	Window = { Color3.fromRGB(70, 55, 130), Color3.fromRGB(30, 22, 64) },
+	Lime = { Color3.fromRGB(190, 255, 90), Color3.fromRGB(70, 200, 40) },
+	Cash = { Color3.fromRGB(130, 235, 100), Color3.fromRGB(30, 150, 60) },
+	Sky = { Color3.fromRGB(110, 210, 255), Color3.fromRGB(20, 110, 230) },
 }
 
 local function make(class: string, props: { [string]: any }, children: { Instance }?): any
@@ -117,21 +120,34 @@ Builder.Panel = panel
 
 -- HUD -------------------------------------------------------------------------------
 
-local function counter(parent: Instance, name: string, pair: { Color3 }, iconId: string, fallback: string, order: number)
-	local holder = make("Frame", { Name = name, BackgroundTransparency = 1, Size = UDim2.fromOffset(250, 66), LayoutOrder = order, Parent = parent })
-	local bar = panel(holder, "Bar", pair, UDim2.new(1, -30, 0, 52), UDim2.fromOffset(30, 7), 26)
-	icon(holder, "Icon", iconId, UDim2.fromOffset(66, 66), UDim2.fromOffset(0, 0), fallback)
-	text({ Name = "Value", Text = "0", TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -60, 0, 30), Position = UDim2.fromOffset(46, 3), Parent = bar })
-	text({ Name = "Sub", Text = "", Font = Builder.Font, Outline = 2, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -60, 0, 16), Position = UDim2.fromOffset(46, 32), Parent = bar })
-	return holder, bar
+local LEFT = Enum.TextXAlignment.Left
+
+-- Big outlined stat line in the bottom-left corner, e.g. [cash icon] $49.2B.
+local function stat(parent: Instance, name: string, iconId: string, fallback: string, color: Color3, order: number)
+	local row = make("Frame", { Name = name, BackgroundTransparency = 1, Size = UDim2.fromOffset(360, 52), LayoutOrder = order, Parent = parent })
+	icon(row, "Icon", iconId, UDim2.fromOffset(52, 52), UDim2.new(), fallback)
+	text({ Name = "Value", Text = "0", TextColor3 = color, TextXAlignment = LEFT, Size = UDim2.new(1, -62, 0, 36), Position = UDim2.fromOffset(60, 0), Outline = 3.5, Parent = row })
+	text({ Name = "Sub", Text = "", Font = Builder.Font, Outline = 2, TextXAlignment = LEFT, Size = UDim2.new(1, -62, 0, 16), Position = UDim2.fromOffset(62, 35), Parent = row })
+	return row
 end
 
-local function sideButton(parent: Instance, name: string, label: string, pair: { Color3 }, iconId: string, fallback: string, order: number)
-	local b = button(parent, name, pair, UDim2.fromOffset(92, 92), UDim2.new(), "", 22)
+-- Wide menu button with an icon on the left: [cart] Shop.
+local function menuButton(parent: Instance, name: string, label: string, pair: { Color3 }, iconId: string, fallback: string, order: number)
+	local b = button(parent, name, pair, UDim2.fromOffset(176, 58), UDim2.new(), "", 14)
 	b.LayoutOrder = order
 	b.Label:Destroy()
-	icon(b, "Icon", iconId, UDim2.fromOffset(62, 62), UDim2.fromOffset(15, 4), fallback)
-	text({ Name = "Label", Text = label, Size = UDim2.new(1, -8, 0, 22), Position = UDim2.new(0, 4, 1, -26), Parent = b })
+	icon(b, "Icon", iconId, UDim2.fromOffset(48, 48), UDim2.fromOffset(8, 5), fallback)
+	text({ Name = "Label", Text = label, TextXAlignment = LEFT, Size = UDim2.new(1, -70, 0, 34), Position = UDim2.fromOffset(62, 12), Parent = b })
+	return b
+end
+
+-- Square icon button for the right edge.
+local function squareButton(parent: Instance, name: string, label: string, pair: { Color3 }, iconId: string, fallback: string, order: number)
+	local b = button(parent, name, pair, UDim2.fromOffset(84, 84), UDim2.new(), "", 18)
+	b.LayoutOrder = order
+	b.Label:Destroy()
+	icon(b, "Icon", iconId, UDim2.fromOffset(56, 56), UDim2.fromOffset(14, 4), fallback)
+	text({ Name = "Label", Text = label, Size = UDim2.new(1, -8, 0, 20), Position = UDim2.new(0, 4, 1, -24), Parent = b })
 	return b
 end
 
@@ -153,36 +169,51 @@ local function window(parent: Instance, name: string, title: string, pair: { Col
 	return w, body
 end
 
+-- Tall trail card in the style of the big simulators: colour fill, name, rarity, x speed, $ and R$ buttons.
 local function trailCard(parent: Instance, index: number)
 	local trail = Config.Trails[index]
 	local rarity = Config.RarityInfo(trail.Rarity)
-	local card = panel(parent, "Trail" .. index, { rarity.Color:Lerp(Color3.new(0, 0, 0), 0.35), rarity.Shade:Lerp(Color3.new(0, 0, 0), 0.65) }, UDim2.new(), UDim2.new(), 18)
+	local card = panel(parent, "Trail" .. index, { trail.Colors[1], trail.Colors[2] }, UDim2.fromOffset(200, 340), UDim2.new(), 18)
 	card.LayoutOrder = index
-	local ribbon = panel(card, "Rarity", { rarity.Color, rarity.Shade }, UDim2.new(1, -24, 0, 30), UDim2.fromOffset(12, 8), 12)
-	text({ Name = "Text", Text = trail.Rarity:upper(), Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), Parent = ribbon })
-	local preview = panel(card, "Preview", { trail.Colors[1], trail.Colors[2] }, UDim2.new(1, -24, 0, 58), UDim2.fromOffset(12, 44), 29)
-	preview.Gloss.Rotation = 0
-	icon(preview, "Icon", Config.Icons.Trail, UDim2.fromOffset(54, 54), UDim2.fromOffset(4, 2), "✨")
-	text({ Name = "Name", Text = trail.Name:upper(), Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, 106), Parent = card })
-	local badge = panel(card, "Multiplier", Builder.Colors.Green, UDim2.new(1, -60, 0, 26), UDim2.fromOffset(30, 138), 13)
-	text({ Name = "Text", Text = string.format("x%.2f SPEED", trail.Multiplier), Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), Parent = badge })
-	button(card, "BuyCash", Builder.Colors.Gold, UDim2.new(0.5, -16, 0, 40), UDim2.new(0, 12, 0, 172), "$" .. Config.Format(trail.Cost), 12)
-	button(card, "BuyRobux", Builder.Colors.Teal, UDim2.new(0.5, -16, 0, 40), UDim2.new(0.5, 4, 0, 172), "R$ " .. trail.Robux, 12)
-	local equip = button(card, "Equip", Builder.Colors.Blue, UDim2.new(1, -24, 0, 40), UDim2.fromOffset(12, 172), "EQUIP", 12)
+	text({ Name = "Name", Text = trail.Name:upper() .. " TRAIL", Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(10, 10), Outline = 3.5, Parent = card })
+	text({ Name = "Rarity", Text = trail.Rarity, Font = Builder.Font, TextColor3 = rarity.Color, Size = UDim2.new(1, -40, 0, 22), Position = UDim2.fromOffset(20, 42), Parent = card })
+	local preview = icon(card, "Preview", Config.Icons.Trail, UDim2.fromOffset(130, 130), UDim2.new(0.5, -65, 0, 66), "✨")
+	preview.Rotation = -8
+	if preview:IsA("ImageLabel") then
+		preview.ImageColor3 = trail.Colors[1]:Lerp(Color3.new(1, 1, 1), 0.35)
+	end
+	local pill = make("Frame", {
+		Name = "Multiplier", BackgroundColor3 = INK, BackgroundTransparency = 0.35, Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 204), ZIndex = 3, Parent = card,
+	}, { corner(12) })
+	text({ Name = "Text", Text = string.format("x%s Speed", tostring(trail.Multiplier)), Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), Parent = pill })
+	button(card, "BuyCash", Builder.Colors.Lime, UDim2.new(0.58, -16, 0, 46), UDim2.new(0, 12, 0, 254), "$" .. Config.Format(trail.Cost), 12)
+	button(card, "BuyRobux", Builder.Colors.Pink, UDim2.new(0.42, -8, 0, 46), UDim2.new(0.58, -4, 0, 254), "R$" .. trail.Robux, 12)
+	local equip = button(card, "Equip", Builder.Colors.Blue, UDim2.new(1, -24, 0, 46), UDim2.fromOffset(12, 254), "EQUIP", 12)
 	equip.Visible = false
-	text({ Name = "State", Text = "NOT OWNED", Font = Builder.Font, Outline = 2, TextColor3 = Color3.fromRGB(220, 215, 245), Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 218), Parent = card })
+	text({ Name = "State", Text = "NOT OWNED", Font = Builder.Font, Outline = 2, TextColor3 = Color3.fromRGB(240, 235, 255), Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 308), Parent = card })
+	return card
+end
+
+-- Robux pack card: big art, amount, green price button.
+local function packCard(parent: Instance, name: string, pair: { Color3 }, iconId: string, fallback: string, title: string, robux: number, order: number)
+	local card = panel(parent, name, pair, UDim2.new(), UDim2.new(), 16)
+	card.LayoutOrder = order
+	icon(card, "Icon", iconId, UDim2.fromOffset(104, 104), UDim2.new(0.5, -52, 0, 6), fallback)
+	local amount = text({ Name = "Amount", Text = title, RichText = true, Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 108), Outline = 3.5, Parent = card })
+	amount.ZIndex = 5
+	button(card, "Buy", Builder.Colors.Lime, UDim2.new(1, -40, 0, 40), UDim2.new(0, 20, 1, -48), "R$ " .. robux, 12)
 	return card
 end
 
 local function upgradeCard(parent: Instance, name: string, title: string, desc: string, pair: { Color3 }, iconId: string, fallback: string, order: number)
-	local card = panel(parent, name, pair, UDim2.new(0.5, -10, 1, -10), UDim2.new(), 20)
+	local card = panel(parent, name, pair, UDim2.new(1 / 3, -14, 1, -10), UDim2.new(), 20)
 	card.LayoutOrder = order
 	icon(card, "Icon", iconId, UDim2.fromOffset(88, 88), UDim2.new(0.5, -44, 0, 12), fallback)
 	text({ Name = "Title", Text = title, Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 104), Parent = card })
 	text({ Name = "Level", Text = "LEVEL 0", Font = Builder.Font, Outline = 2, Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 140), Parent = card })
 	local track = make("Frame", { Name = "Progress", BackgroundColor3 = INK, Size = UDim2.new(1, -40, 0, 16), Position = UDim2.fromOffset(20, 170), ZIndex = 3, Parent = card }, { corner(8) })
 	make("Frame", { Name = "Fill", BackgroundColor3 = WHITE, Size = UDim2.fromScale(0, 1), ZIndex = 4, Parent = track }, { corner(8), Builder.Gradient(Builder.Colors.Green, 0) })
-	text({ Name = "Desc", Text = desc, Font = Builder.Font, Outline = 2, TextColor3 = Color3.fromRGB(255, 250, 230), Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 192), Parent = card })
+	text({ Name = "Desc", Text = desc, Font = Builder.Font, Outline = 2, TextColor3 = Color3.fromRGB(255, 250, 230), Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(12, 192), TextWrapped = true, Parent = card })
 	button(card, "Buy", Builder.Colors.Green, UDim2.new(1, -40, 0, 46), UDim2.new(0, 20, 1, -58), "BUY", 14)
 	return card
 end
@@ -190,9 +221,24 @@ end
 local function toggleRow(parent: Instance, name: string, label: string, order: number)
 	local row = panel(parent, name, Builder.Colors.Window, UDim2.new(1, -8, 0, 58), UDim2.new(), 16)
 	row.LayoutOrder = order
-	text({ Name = "Label", Text = label, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -150, 0, 34), Position = UDim2.fromOffset(18, 12), Parent = row })
+	text({ Name = "Label", Text = label, TextXAlignment = LEFT, Size = UDim2.new(1, -150, 0, 34), Position = UDim2.fromOffset(18, 12), Parent = row })
 	local toggle = button(row, "Toggle", Builder.Colors.Green, UDim2.fromOffset(110, 42), UDim2.new(1, -124, 0, 8), "ON", 21)
 	return row, toggle
+end
+
+local function page(parent: Instance, name: string, cell: Vector2?): GuiObject
+	if not cell then
+		return make("Frame", {
+			Name = name, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = parent,
+		}, { make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 20), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+	end
+	return make("ScrollingFrame", {
+		Name = name, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Visible = false,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 8, ScrollBarImageColor3 = WHITE, Parent = parent,
+	}, {
+		make("UIGridLayout", { CellSize = UDim2.fromOffset(cell.X, cell.Y), CellPadding = UDim2.fromOffset(14, 14), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+		make("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }),
+	})
 end
 
 -- Build everything ---------------------------------------------------------------------
@@ -217,31 +263,48 @@ function Builder.Build(parent: Instance): ScreenGui
 		}, { make("UIGradient", { Rotation = edge[5], Transparency = NumberSequence.new(0, 1) }) })
 	end
 
-	-- Counters (top left).
-	local counters = make("Frame", {
-		Name = "Counters", BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 10), Size = UDim2.fromOffset(250, 230), Parent = gui,
-	}, { make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	counter(counters, "Cash", Builder.Colors.Gold, Config.Icons.Coin, "$", 1)
-	local _, speedBar = counter(counters, "Speed", Builder.Colors.Blue, Config.Icons.Speed, "⚡", 2)
-	local track = make("Frame", { Name = "Progress", BackgroundColor3 = INK, BackgroundTransparency = 0.2, Size = UDim2.new(1, -60, 0, 6), Position = UDim2.new(0, 46, 1, -9), ZIndex = 3, Parent = speedBar }, { corner(3) })
-	make("Frame", { Name = "Fill", BackgroundColor3 = WHITE, Size = UDim2.fromScale(0, 1), ZIndex = 4, Parent = track }, { corner(3) })
-	counter(counters, "Eggs", Builder.Colors.Pink, Config.Icons.Egg, "🥚", 3)
+	-- Stats (bottom left): eggs, speed, cash.
+	local stats = make("Frame", {
+		Name = "Stats", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -30), Size = UDim2.fromOffset(360, 180), Parent = gui,
+	}, { make("UIListLayout", { Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Bottom, SortOrder = Enum.SortOrder.LayoutOrder }) })
+	stat(stats, "Eggs", Config.Icons.Egg, "🥚", Color3.fromRGB(255, 170, 230), 1)
+	local speed = stat(stats, "Speed", Config.Icons.Speed, "⚡", Color3.fromRGB(150, 120, 255), 2)
+	local track = make("Frame", { Name = "Progress", BackgroundColor3 = INK, BackgroundTransparency = 0.2, Size = UDim2.fromOffset(150, 6), Position = UDim2.new(1, -150, 0, 42), ZIndex = 3, Parent = speed }, { corner(3) })
+	make("Frame", { Name = "Fill", BackgroundColor3 = Color3.fromRGB(150, 120, 255), Size = UDim2.fromScale(0, 1), ZIndex = 4, Parent = track }, { corner(3) })
+	stat(stats, "Cash", Config.Icons.Coin, "$", Color3.fromRGB(110, 255, 90), 3)
 
-	-- Side buttons (left, 2 columns).
+	-- Menu (left): Shop, Index, Trails and the Slow Mode switch.
+	local menu = make("Frame", {
+		Name = "Menu", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.4, 0), Size = UDim2.fromOffset(186, 250), Parent = gui,
+	}, { make("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	menuButton(menu, "Shop", "Shop", Builder.Colors.Green, Config.Icons.Shop, "🛒", 1)
+	menuButton(menu, "Index", "Index", Builder.Colors.Blue, Config.Icons.Index, "📖", 2)
+	menuButton(menu, "Trails", "Trails", Builder.Colors.Pink, Config.Icons.Trail, "✨", 3)
+	local slow = make("Frame", { Name = "SlowMode", BackgroundTransparency = 1, Size = UDim2.fromOffset(186, 36), LayoutOrder = 4, Parent = menu })
+	local switch = make("TextButton", {
+		Name = "Switch", Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(70, 74, 90), Size = UDim2.fromOffset(70, 32), Position = UDim2.fromOffset(2, 2), Parent = slow,
+	}, { corner(16), outline(3), make("UIScale", { Name = "Press" }) })
+	make("Frame", { Name = "Knob", BackgroundColor3 = Color3.fromRGB(190, 190, 205), Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(3, 3), ZIndex = 2, Parent = switch }, { corner(13) })
+	text({ Name = "Label", Text = "Slow Mode", Font = Builder.Font, Outline = 2, TextXAlignment = LEFT, Size = UDim2.fromOffset(104, 24), Position = UDim2.fromOffset(82, 6), Parent = slow })
+
+	-- Right edge: free gift and settings.
 	local side = make("Frame", {
-		Name = "SideButtons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 14, 0.5, 70), Size = UDim2.fromOffset(196, 306), Parent = gui,
-	}, { make("UIGridLayout", { CellSize = UDim2.fromOffset(92, 92), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	sideButton(side, "Shop", "SHOP", Builder.Colors.Green, Config.Icons.Shop, "🛒", 1)
-	sideButton(side, "Index", "INDEX", Builder.Colors.Purple, Config.Icons.Index, "📖", 2)
-	sideButton(side, "Trails", "TRAILS", Builder.Colors.Pink, Config.Icons.Trail, "✨", 3)
-	local rewards = sideButton(side, "Rewards", "REWARDS", Builder.Colors.Orange, Config.Icons.Rewards, "🎁", 4)
-	local badge = panel(rewards, "Badge", Builder.Colors.Red, UDim2.fromOffset(30, 30), UDim2.new(1, -22, 0, -8), 15)
+		Name = "SideButtons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.42, 0), Size = UDim2.fromOffset(84, 184), Parent = gui,
+	}, { make("UIListLayout", { Padding = UDim.new(0, 14), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local rewards = squareButton(side, "Rewards", "GIFT", Builder.Colors.Orange, Config.Icons.Rewards, "🎁", 1)
+	local badge = panel(rewards, "Badge", Builder.Colors.Red, UDim2.fromOffset(30, 30), UDim2.new(1, -20, 0, -10), 15)
 	badge.ZIndex = 6
-	text({ Name = "Text", Text = "!", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), ZIndex = 7, Parent = badge })
-	sideButton(side, "Settings", "SETTINGS", Builder.Colors.Steel, Config.Icons.Settings, "⚙", 5)
+	text({ Name = "Text", Text = "1", Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), ZIndex = 7, Parent = badge })
+	squareButton(side, "Settings", "SETTINGS", Builder.Colors.Steel, Config.Icons.Settings, "⚙", 2)
 
-	text({ Name = "SaveStatus", Text = "", Font = Builder.Font, Outline = 1.5, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(210, 210, 235), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -8), Size = UDim2.fromOffset(330, 18), Parent = gui })
+	-- Free gift countdown (top right).
+	local timer = make("Frame", {
+		Name = "GiftTimer", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 10), Size = UDim2.fromOffset(230, 40), Parent = gui,
+	})
+	icon(timer, "Icon", Config.Icons.Rewards, UDim2.fromOffset(40, 40), UDim2.new(), "🎁")
+	text({ Name = "Text", Text = "", TextXAlignment = LEFT, Size = UDim2.new(1, -48, 0, 30), Position = UDim2.fromOffset(48, 5), Parent = timer })
+
+	text({ Name = "SaveStatus", Text = "", Font = Builder.Font, Outline = 1.5, TextXAlignment = LEFT, TextColor3 = Color3.fromRGB(210, 210, 235), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -8), Size = UDim2.fromOffset(330, 18), Parent = gui })
 
 	-- Zone banner, chase warning and carried egg.
 	local banner = panel(gui, "ZoneBanner", Builder.Colors.Green, UDim2.fromOffset(440, 84), UDim2.new(0.5, 0, 0, -200), 22)
@@ -272,25 +335,42 @@ function Builder.Build(parent: Instance): ScreenGui
 	text({ Name = "SplashSub", Text = "", Visible = false, Font = Builder.Font, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(460, 40), Outline = 3, TextColor3 = Color3.fromRGB(255, 220, 90), Parent = gui })
 
 	-- Windows ---------------------------------------------------------------------------
-	local _, trailBody = window(gui, "TrailsWindow", "TRAIL SHOP", Builder.Colors.Pink, Vector2.new(720, 540))
-	local scroller = make("ScrollingFrame", {
-		Name = "Cards", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -36),
-		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 8, ScrollBarImageColor3 = Color3.fromRGB(255, 170, 230), Parent = trailBody,
+	local _, trailBody = window(gui, "TrailsWindow", "TRAIL SHOP", Builder.Colors.Pink, Vector2.new(780, 480))
+	make("ScrollingFrame", {
+		Name = "Cards", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -32), ScrollingDirection = Enum.ScrollingDirection.X,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollBarThickness = 8, ScrollBarImageColor3 = Color3.fromRGB(255, 170, 230), Parent = trailBody,
 	}, {
-		make("UIGridLayout", { CellSize = UDim2.fromOffset(210, 244), CellPadding = UDim2.fromOffset(14, 14), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
-		make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }),
+		make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 14), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
 	})
 	for index = 1, #Config.Trails do
-		trailCard(scroller, index)
+		trailCard(trailBody.Cards, index)
 	end
-	text({ Name = "Status", Text = "Trails multiply your running speed!", Font = Builder.Font, Outline = 2, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -4), Size = UDim2.new(1, 0, 0, 26), Parent = trailBody })
+	text({ Name = "Status", Text = "Trails multiply your running speed!", Font = Builder.Font, Outline = 2, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -2), Size = UDim2.new(1, 0, 0, 26), Parent = trailBody })
 
-	local _, shopBody = window(gui, "ShopWindow", "UPGRADES", Builder.Colors.Green, Vector2.new(620, 400))
-	make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 20), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Parent = shopBody })
-	upgradeCard(shopBody, "Speed", "SPEED", "+" .. Config.SpeedPerLevel .. " walk speed per level", Builder.Colors.Blue, Config.Icons.Speed, "⚡", 1)
-	upgradeCard(shopBody, "Storage", "STORAGE", "+" .. Config.CapacityStep .. " egg slots in your base", Builder.Colors.Pink, Config.Icons.Egg, "🥚", 2)
+	local _, shopBody = window(gui, "ShopWindow", "SHOP", Builder.Colors.Green, Vector2.new(760, 540))
+	local tabs = make("Frame", { Name = "Tabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), Parent = shopBody }, {
+		make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	for n, tab in { { "Cash", "CASH", Builder.Colors.Green }, { "Speed", "SPEED", Builder.Colors.Blue }, { "Upgrades", "UPGRADES", Builder.Colors.Orange } } do
+		button(tabs, tab[1], tab[3], UDim2.fromOffset(170, 44), UDim2.new(), tab[2], 14).LayoutOrder = n
+	end
+	local pages = make("Frame", { Name = "Pages", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -60), Position = UDim2.fromOffset(0, 58), Parent = shopBody })
+	local cashPage = page(pages, "Cash", Vector2.new(216, 196))
+	cashPage.Visible = true
+	for n, pack in Config.CashPacks do
+		packCard(cashPage, "Pack" .. n, Builder.Colors.Cash, Config.Icons[pack.Icon] or "", "💵", "$" .. Config.Format(pack.Amount), pack.Robux, n)
+	end
+	local speedPage = page(pages, "Speed", Vector2.new(216, 196))
+	for n, pack in Config.SpeedPacks do
+		packCard(speedPage, "Pack" .. n, Builder.Colors.Sky, Config.Icons[pack.Icon] or "", "👟", string.format('<font color="#7CFF5A">+%d</font> SPEED', pack.Amount), pack.Robux, n)
+	end
+	local upgradePage = page(pages, "Upgrades")
+	upgradeCard(upgradePage, "Speed", "SPEED", "+" .. Config.SpeedPerLevel .. " walk speed per level", Builder.Colors.Blue, Config.Icons.Speed, "⚡", 1)
+	upgradeCard(upgradePage, "Storage", "STORAGE", "+" .. Config.CapacityStep .. " egg slots in your base", Builder.Colors.Pink, Config.Icons.Egg, "🥚", 2)
+	upgradeCard(upgradePage, "Treadmill", "TREADMILL", "New design and +" .. Config.TreadSpeedPerLevel .. " speed per level", Builder.Colors.Purple, Config.Icons.Treadmill or "", "🏃", 3)
 
-	local _, indexBody = window(gui, "IndexWindow", "EGG INDEX", Builder.Colors.Purple, Vector2.new(640, 520))
+	local _, indexBody = window(gui, "IndexWindow", "EGG INDEX", Builder.Colors.Blue, Vector2.new(640, 520))
 	make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = indexBody })
 	local headerRow = make("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 0, Parent = indexBody })
 	for n, column in { { "RARITY", 0.06, 0.34 }, { "INCOME", 0.4, 0.18 }, { "FOREST", 0.6, 0.18 }, { "SHADOW", 0.8, 0.18 } } do
@@ -306,7 +386,7 @@ function Builder.Build(parent: Instance): ScreenGui
 		local row = panel(indexBody, rarity.Name, { rarity.Color:Lerp(Color3.new(0, 0, 0), 0.25), rarity.Shade:Lerp(Color3.new(0, 0, 0), 0.6) }, UDim2.new(1, -8, 0, 52), UDim2.new(), 14)
 		row.LayoutOrder = i
 		icon(row, "Egg", Config.Icons.Egg, UDim2.fromOffset(44, 44), UDim2.fromOffset(6, 4), "🥚")
-		text({ Name = "Name", Text = rarity.Name:upper(), TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.new(0.06, 26, 0, 10), Size = UDim2.new(0.34, -26, 0, 32), Parent = row })
+		text({ Name = "Name", Text = rarity.Name:upper(), TextXAlignment = LEFT, Position = UDim2.new(0.06, 26, 0, 10), Size = UDim2.new(0.34, -26, 0, 32), Parent = row })
 		text({ Name = "Income", Text = "x" .. rarity.Multiplier, Position = UDim2.new(0.4, 0, 0, 10), Size = UDim2.new(0.18, 0, 0, 32), Parent = row })
 		text({ Name = "Forest", Text = string.format("%.1f%%", forest[i] / forestTotal * 100), Font = Builder.Font, Position = UDim2.new(0.6, 0, 0, 12), Size = UDim2.new(0.18, 0, 0, 28), Parent = row })
 		text({ Name = "Shadow", Text = string.format("%.1f%%", shadowW[i] / shadowTotal * 100), Font = Builder.Font, Position = UDim2.new(0.8, 0, 0, 12), Size = UDim2.new(0.18, 0, 0, 28), Parent = row })

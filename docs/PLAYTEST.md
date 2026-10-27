@@ -1,5 +1,23 @@
 # Studio verification — 2026-10-26 (v2 rebuild)
 
+## Update 2026-10-27: simulator-style HUD, Robux shop and base props (place ST)
+
+- New HUD built as real GUI objects (`MonsterEggHUD` in StarterGui, 1100+ objects): bottom-left stats, Shop/Index/Trails menu with Slow Mode, Gift/Settings buttons and a gift countdown. Windows checked in Play with screenshots: Shop (Cash, Speed and Upgrades tabs), horizontal Trail Shop, Egg Index, Free Gift and Settings.
+- 6 new ForgeGUI images (cash stack, money bag, cash chest, shoe pile, shoe chest, fuse machine) were published as approved Roblox Images; 5 are used on the pack cards. The Index button icon was published too. The shop, rewards and settings icon jobs stayed "running" and those buttons use emoji.
+- Base props in every base: an upgrade board, a SELL stall and a Fuse Machine.
+  - Real mouse clicks on the board's $ and R$ buttons worked in Play: $ upgraded the treadmill; R$ showed the "not set up yet" notice, because the developer product ids are still 0.
+  - The HUD buttons were clicked as well: Shop, its tabs, Upgrades → Speed, Trails, the Settings toggles and Gift → Claim.
+- `tests/StudioSmoke.luau`: **123 of 123 checks passed**. New checks:
+  - HUD upgrades;
+  - the free gift and its cooldown;
+  - the props in every base;
+  - the board showing max level;
+  - fuse 3 Common → 1 Uncommon, and fusing needs 3 of a kind;
+  - sell all;
+  - cash, speed, trail and treadmill Robux grants;
+  - Slow Mode on and off.
+- No game errors in the log. All 12 Studio scripts match `src/`.
+
 ## Update 2026-10-27: ForgeGUI audio, icons and landmarks (place ST, 77852204695857)
 
 - 7 sound effects and 7 music tracks were generated with ForgeGUI and published as Roblox Audio. The Desert and Ice tracks failed on the first try and succeeded on a retry. All 14 report `AssetFetchStatus.Success` in Play; the safe-zone music starts at volume 0.3.

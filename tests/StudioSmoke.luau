@@ -194,4 +194,41 @@ task.wait(0.3)
 check("Respawn at own base", (character().HumanoidRootPart.Position - World.SpawnPoint(baseIndex)).Magnitude < 10)
 teleport(SAFE)
 
+-- Base props, Robux products and Slow Mode -----------------------------------------------------
+check("Every base has an upgrade board, sell stall and fuse machine", (function()
+	for _, base in world.Sanctuary.Bases:GetChildren() do
+		if not (base:FindFirstChild("UpgradeBoard") and base:FindFirstChild("SellStall") and base:FindFirstChild("FuseMachine")) then
+			return false
+		end
+	end
+	return true
+end)())
+check("Upgrade board shows max level", myBase.UpgradeBoard.Board.Screen.Levels.Text == "MAX LEVEL " .. Config.MaxTreadLevel)
+qa:Invoke("SetEggs", player, { { Z = 1, R = 1 }, { Z = 2, R = 1 }, { Z = 3, R = 1 }, { Z = 1, R = 4 } })
+check("Fuse machine shows ready", myBase.FuseMachine.Body.Count.Text.Text == "READY!")
+local fused = qa:Invoke("Shop", player, { Action = "Fuse", Index = 0 })
+local eggs = qa:Invoke("Snapshot", player).Profile.Eggs
+check("Fuse turns 3 Common eggs into 1 Uncommon", fused and #eggs == 2 and eggs[2].R == 2 and eggs[2].Z == 3)
+check("Fuse needs 3 of a kind", not (qa:Invoke("Shop", player, { Action = "Fuse", Index = 0 })))
+cash = player:GetAttribute("Cash")
+check("Sell stall sells every egg", (qa:Invoke("Shop", player, { Action = "SellAll", Index = 0 })) and player:GetAttribute("EggCount") == 0 and player:GetAttribute("Cash") > cash)
+
+cash = player:GetAttribute("Cash")
+qa:Invoke("Product", player, { Kind = "Cash", Index = 2 })
+check("Robux cash pack", player:GetAttribute("Cash") >= cash + Config.CashPacks[2].Amount)
+local walkNow = player:GetAttribute("WalkSpeed")
+qa:Invoke("Product", player, { Kind = "Speed", Index = 1 })
+check("Robux speed pack", player:GetAttribute("BonusSpeed") == Config.SpeedPacks[1].Amount
+	and math.abs(player:GetAttribute("WalkSpeed") - walkNow - Config.SpeedPacks[1].Amount * Config.Trails[1].Multiplier) < 0.01)
+qa:Invoke("Product", player, { Kind = "Trail", Index = 6 })
+check("Robux trail unlocks and equips", player:GetAttribute("Trail") == 6)
+cash = player:GetAttribute("Cash")
+qa:Invoke("Product", player, { Kind = "Tread", Index = 0 })
+check("Robux treadmill level at max pays cash instead", player:GetAttribute("TreadLevel") == Config.MaxTreadLevel and player:GetAttribute("Cash") > cash)
+
+qa:Invoke("Shop", player, { Action = "SlowMode", Index = true })
+check("Slow Mode walks at base speed", character().Humanoid.WalkSpeed == Config.BaseWalkSpeed)
+qa:Invoke("Shop", player, { Action = "SlowMode", Index = false })
+check("Slow Mode off restores full speed", math.abs(character().Humanoid.WalkSpeed - player:GetAttribute("WalkSpeed")) < 0.01)
+
 return { passed = #passed, failed = failed, temporaryProgress = true }

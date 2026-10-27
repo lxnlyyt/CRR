@@ -1,5 +1,5 @@
--- Binds behaviour to the HUD built by HudBuilder: counters, side buttons, windows (Trail Shop,
--- Upgrades, Index, Rewards, Settings), toasts, chase warning and the carried-egg card.
+-- Binds behaviour to the HUD built by HudBuilder: stats, menu, Slow Mode, windows (Shop with
+-- Robux packs and upgrades, Trail Shop, Index, Rewards, Settings), toasts, chase warning and carry card.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,7 @@ local Hud = {}
 
 export type Handlers = {
 	Shop: (action: string, index: any) -> (boolean, string),
-	Robux: (index: number) -> (),
+	Robux: (kind: string, index: number) -> (), -- kind: "Trail", "Cash", "Speed" or "Tread"
 	Claim: () -> (boolean, string),
 	Setting: (name: string, enabled: boolean) -> (),
 }
@@ -128,10 +128,12 @@ function Hud.Build(callbacks: Handlers)
 	Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 	rescale()
 
-	local counters = gui:WaitForChild("Counters")
-	refs.Cash = counters.Cash.Bar
-	refs.Speed = counters.Speed.Bar
-	refs.Eggs = counters.Eggs.Bar
+	local stats = gui:WaitForChild("Stats")
+	refs.Cash = stats.Cash
+	refs.Speed = stats.Speed
+	refs.Eggs = stats.Eggs
+	refs.GiftTimer = gui:WaitForChild("GiftTimer").Text
+	refs.Slow = gui:WaitForChild("Menu").SlowMode.Switch
 	refs.Vignette = gui:WaitForChild("Vignette"):GetChildren()
 	refs.Save = gui:WaitForChild("SaveStatus")
 	refs.Banner = gui:WaitForChild("ZoneBanner")
@@ -155,7 +157,8 @@ function Hud.Build(callbacks: Handlers)
 	-- Side buttons and close buttons.
 	local windows = { Shop = "ShopWindow", Index = "IndexWindow", Trails = "TrailsWindow", Rewards = "RewardsWindow", Settings = "SettingsWindow" }
 	for buttonName, windowName in windows do
-		local sideButton = gui.SideButtons:WaitForChild(buttonName) :: TextButton
+		local holder = if buttonName == "Rewards" or buttonName == "Settings" then gui.SideButtons else gui.Menu
+		local sideButton = holder:WaitForChild(buttonName) :: TextButton
 		sideButton.Activated:Connect(function()
 			Hud.Open(windowName)
 		end)
@@ -174,7 +177,7 @@ function Hud.Build(callbacks: Handlers)
 			pop(card, 0.92)
 		end)
 		card.BuyRobux.Activated:Connect(function()
-			handlers.Robux(index)
+			handlers.Robux("Trail", index)
 		end)
 		card.Equip.Activated:Connect(function()
 			local ok, message = handlers.Shop("Equip", index)
@@ -183,9 +186,35 @@ function Hud.Build(callbacks: Handlers)
 		end)
 	end
 
+	-- Shop tabs and Robux packs.
+	local pages = refs.Shop.Body.Pages
+	refs.Upgrades = pages.Upgrades
+	for _, tab in refs.Shop.Body.Tabs:GetChildren() do
+		if tab:IsA("TextButton") then
+			tab.Activated:Connect(function()
+				for _, pageFrame in pages:GetChildren() do
+					pageFrame.Visible = pageFrame.Name == tab.Name
+				end
+				Hud.Update()
+			end)
+		end
+	end
+	for kind, packs in { Cash = Config.CashPacks, Speed = Config.SpeedPacks } do
+		for index = 1, #packs do
+			pages[kind]:WaitForChild("Pack" .. index).Buy.Activated:Connect(function()
+				handlers.Robux(kind, index)
+			end)
+		end
+	end
+
+	-- Slow Mode (server keeps the real walk speed so upgrades still count).
+	refs.Slow.Activated:Connect(function()
+		handlers.Shop("SlowMode", not player:GetAttribute("SlowMode"))
+	end)
+
 	-- Upgrades.
-	for _, name in { "Speed", "Storage" } do
-		local card = refs.Shop.Body:WaitForChild(name)
+	for _, name in { "Speed", "Storage", "Treadmill" } do
+		local card = refs.Upgrades:WaitForChild(name)
 		card.Buy.Activated:Connect(function()
 			-- The server sends its own notice toast for upgrades.
 			handlers.Shop("Upgrade", name)
@@ -250,7 +279,7 @@ local function refreshUpgrades()
 	local speed = player:GetAttribute("SpeedLevel") or 0
 	local capacity = player:GetAttribute("Capacity") or Config.StartCapacity
 	local cash = player:GetAttribute("Cash") or 0
-	local speedCard, storageCard = refs.Shop.Body.Speed, refs.Shop.Body.Storage
+	local speedCard, storageCard = refs.Upgrades.Speed, refs.Upgrades.Storage
 	local speedMax = speed >= Config.MaxSpeedLevel
 	speedCard.Level.Text = if speedMax then "MAX LEVEL" else string.format("LEVEL %d → %d", speed, speed + 1)
 	speedCard.Progress.Fill.Size = UDim2.fromScale(speed / Config.MaxSpeedLevel, 1)
@@ -261,6 +290,13 @@ local function refreshUpgrades()
 	storageCard.Progress.Fill.Size = UDim2.fromScale((capacity - Config.StartCapacity) / (Config.MaxCapacity - Config.StartCapacity), 1)
 	setLabel(storageCard.Buy, if storageMax then "MAXED" else "$" .. Config.Format(Config.StorageCost(capacity)))
 	setPair(storageCard.Buy, if not storageMax and cash >= Config.StorageCost(capacity) then Builder.Colors.Green else Builder.Colors.Grey)
+	local tread = player:GetAttribute("TreadLevel") or 1
+	local treadCard = refs.Upgrades.Treadmill
+	local treadMax = tread >= Config.MaxTreadLevel
+	treadCard.Level.Text = if treadMax then "MAX LEVEL" else string.format("LEVEL %d → %d", tread, tread + 1)
+	treadCard.Progress.Fill.Size = UDim2.fromScale(tread / Config.MaxTreadLevel, 1)
+	setLabel(treadCard.Buy, if treadMax then "MAXED" else "$" .. Config.Format(Config.TreadCost(tread)))
+	setPair(treadCard.Buy, if not treadMax and cash >= Config.TreadCost(tread) then Builder.Colors.Green else Builder.Colors.Grey)
 end
 
 function Hud.Update()
@@ -270,12 +306,21 @@ function Hud.Update()
 	local cash = player:GetAttribute("Cash") or 0
 	refs.Cash.Value.Text = "$" .. Config.Format(cash)
 	refs.Cash.Sub.Text = "+$" .. Config.Format(player:GetAttribute("Income") or 0) .. " per second"
-	refs.Speed.Value.Text = string.format("%.1f SPEED", player:GetAttribute("WalkSpeed") or Config.BaseWalkSpeed)
+	local trail = Config.Trails[player:GetAttribute("Trail") or 0]
+	local walk = player:GetAttribute("WalkSpeed") or Config.BaseWalkSpeed
+	refs.Speed.Value.Text = if trail then string.format("%.1f (x%s)", walk, tostring(trail.Multiplier)) else string.format("%.1f", walk)
 	local training = player:GetAttribute("Training") or 0
-	refs.Speed.Sub.Text = string.format("Treadmill Lv %d  •  Training %d/%d", player:GetAttribute("TreadLevel") or 1, math.min(training, Config.TrainingCap), Config.TrainingCap)
+	refs.Speed.Sub.Text = if player:GetAttribute("SlowMode")
+		then "SLOW MODE ON"
+		else string.format("Treadmill Lv %d  •  Training %d/%d", player:GetAttribute("TreadLevel") or 1, math.min(training, Config.TrainingCap), Config.TrainingCap)
 	refs.Speed.Progress.Fill.Size = UDim2.fromScale(math.clamp(training / Config.TrainingCap, 0, 1), 1)
-	refs.Eggs.Value.Text = string.format("%d / %d EGGS", player:GetAttribute("EggCount") or 0, player:GetAttribute("Capacity") or Config.StartCapacity)
-	refs.Eggs.Sub.Text = "safe in your base"
+	refs.Eggs.Value.Text = string.format("%d/%d", player:GetAttribute("EggCount") or 0, player:GetAttribute("Capacity") or Config.StartCapacity)
+	refs.Eggs.Sub.Text = "eggs in your base"
+	local slow = player:GetAttribute("SlowMode") == true
+	local knob = refs.Slow.Knob
+	knob.Position = UDim2.fromOffset(if slow then 41 else 3, 3)
+	knob.BackgroundColor3 = if slow then Color3.fromRGB(110, 240, 90) else Color3.fromRGB(190, 190, 205)
+	refs.Slow.BackgroundColor3 = if slow then Color3.fromRGB(40, 120, 50) else Color3.fromRGB(70, 74, 90)
 	refs.Save.Text = player:GetAttribute("SaveStatus") or ""
 
 	local carrying = player:GetAttribute("Carrying") or ""
@@ -325,6 +370,8 @@ function Hud.Frame(t: number, safeDistance: number?, danger: number)
 	if ready then
 		refs.RewardBadge.Rotation = math.sin(t * 6) * 12
 	end
+	refs.GiftTimer.Text = if ready then "GIFT READY!" else string.format("in %dm %02ds", remaining // 60, math.floor(remaining % 60))
+	refs.GiftTimer.TextColor3 = if ready then GOLD else Color3.new(1, 1, 1)
 	local claim = refs.Rewards.Body.Claim
 	setLabel(claim, if ready then "CLAIM!" else string.format("%d:%02d", remaining // 60, math.floor(remaining % 60)))
 	setPair(claim, if ready then Builder.Colors.Green else Builder.Colors.Grey)

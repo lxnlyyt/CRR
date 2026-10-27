@@ -28,16 +28,18 @@ local function invokeShop(action: string, index: any): (boolean, string)
 	return result, message
 end
 
+local function promptRobux(kind: string, index: number)
+	local productId = Config.ProductFor(kind, index)
+	if productId > 0 then
+		MarketplaceService:PromptProductPurchase(player, productId)
+	else
+		Hud.Toast("Robux purchases are not set up yet", "info")
+	end
+end
+
 Hud.Build({
 	Shop = invokeShop,
-	Robux = function(index: number)
-		local trail = Config.Trails[index]
-		if trail and trail.ProductId > 0 then
-			MarketplaceService:PromptProductPurchase(player, trail.ProductId)
-		else
-			Hud.Toast("Robux purchases are not set up yet", "info")
-		end
-	end,
+	Robux = promptRobux,
 	Claim = function()
 		return invokeShop("Claim", 0)
 	end,
@@ -85,6 +87,13 @@ end
 function effects.Stolen()
 	Fx.Sound("Steal")
 	Fx.Shake(1, 0.3)
+end
+
+function effects.Fused(rarity: number)
+	local info = Config.Rarities[rarity]
+	Fx.Sound("LevelUp")
+	Fx.Burst(info.Color, 70, 1.4)
+	Hud.Splash("FUSED!", info.Name .. " egg created", info.Color)
 end
 
 function effects.Purchase()
@@ -161,7 +170,7 @@ local function configurePrompt(prompt: Instance)
 	if prompt.Name == "StealPrompt" then
 		local model = prompt:FindFirstAncestorOfClass("Model")
 		prompt.Enabled = model == nil or model:GetAttribute("Carrier") ~= player.UserId
-	elseif prompt.Name == "SellPrompt" or prompt.Name == "UpgradePrompt" then
+	elseif prompt.Name == "SellPrompt" or prompt.Name == "UpgradePrompt" or prompt.Name == "SellAllPrompt" or prompt.Name == "FusePrompt" then
 		local base = prompt:FindFirstAncestor("Base" .. tostring(player:GetAttribute("Base") or 0))
 		prompt.Enabled = base ~= nil
 	end
@@ -174,6 +183,24 @@ for _, container in { runtime:WaitForChild("CarriedEggs"), sanctuary:WaitForChil
 	container.DescendantAdded:Connect(function(item)
 		if item:IsA("ProximityPrompt") then
 			task.defer(configurePrompt, item)
+		end
+	end)
+end
+
+-- Treadmill upgrade boards: the clickable $ and R$ buttons only act on your own base.
+for _, base in sanctuary.Bases:GetChildren() do
+	local screen = base:WaitForChild("UpgradeBoard"):WaitForChild("Board"):WaitForChild("Screen")
+	local function mine(): boolean
+		return base.Name == "Base" .. tostring(player:GetAttribute("Base") or 0)
+	end
+	screen:WaitForChild("CashButton").Activated:Connect(function()
+		if mine() then
+			invokeShop("Upgrade", "Treadmill")
+		end
+	end)
+	screen:WaitForChild("RobuxButton").Activated:Connect(function()
+		if mine() and (player:GetAttribute("TreadLevel") or 1) < Config.MaxTreadLevel then
+			promptRobux("Tread", 0)
 		end
 	end)
 end

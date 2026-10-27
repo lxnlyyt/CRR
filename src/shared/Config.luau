@@ -101,7 +101,13 @@ Config.Icons = {
 	Index = "rbxassetid://116639459091707",
 	Rewards = "REWARDS_ICON",
 	Settings = "SETTINGS_ICON",
-}
+	Treadmill = "TREADMILL_ICON",
+	CashStack = "rbxassetid://82401017937897",
+	CashBag = "rbxassetid://140369184499092",
+	CashChest = "rbxassetid://93655504718541",
+	ShoePile = "rbxassetid://73154659589974",
+	ShoeChest = "rbxassetid://103137180910881",
+} :: { [string]: string }
 
 export type Zone = {
 	Name: string,
@@ -224,6 +230,47 @@ function Config.RarityInfo(name: string): Rarity
 	return Config.Rarities[1]
 end
 
+-- Robux shop packs. Each needs a developer product created in the Creator Hub (ProductId 0 = not set up yet).
+export type Pack = { Amount: number, Robux: number, ProductId: number, Icon: string }
+
+Config.CashPacks = {
+	{ Amount = 5000, Robux = 45, ProductId = 0, Icon = "CashStack" },
+	{ Amount = 25000, Robux = 90, ProductId = 0, Icon = "CashStack" },
+	{ Amount = 100000, Robux = 225, ProductId = 0, Icon = "CashStack" },
+	{ Amount = 500000, Robux = 450, ProductId = 0, Icon = "CashBag" },
+	{ Amount = 2500000, Robux = 720, ProductId = 0, Icon = "CashChest" },
+} :: { Pack }
+
+-- Permanent walk speed added before the trail multiplier.
+Config.SpeedPacks = {
+	{ Amount = 2, Robux = 72, ProductId = 0, Icon = "Speed" },
+	{ Amount = 5, Robux = 225, ProductId = 0, Icon = "Speed" },
+	{ Amount = 10, Robux = 630, ProductId = 0, Icon = "ShoePile" },
+	{ Amount = 15, Robux = 1350, ProductId = 0, Icon = "ShoePile" },
+	{ Amount = 25, Robux = 1800, ProductId = 0, Icon = "ShoeChest" },
+	{ Amount = 40, Robux = 2700, ProductId = 0, Icon = "ShoeChest" },
+} :: { Pack }
+
+-- One developer product that buys the next treadmill level (shown price only; the product sets the real one).
+Config.TreadRobux = { ProductId = 0 }
+function Config.TreadRobuxPrice(level: number): number
+	return 49 + level * 18
+end
+
+-- Developer product id for a Robux purchase ("Trail", "Cash", "Speed" or "Tread"); 0 = not set up.
+function Config.ProductFor(kind: string, index: number?): number
+	local item: { ProductId: number }? = if kind == "Trail"
+		then Config.Trails[index or 0]
+		elseif kind == "Cash" then Config.CashPacks[index or 0]
+		elseif kind == "Speed" then Config.SpeedPacks[index or 0]
+		elseif kind == "Tread" then Config.TreadRobux
+		else nil
+	return if item then item.ProductId else 0
+end
+
+-- Fuse Machine: this many eggs of one rarity become one egg of the next rarity.
+Config.FuseCount = 3
+
 -- Free gift from the Rewards menu.
 Config.RewardCooldown = 15 * 60
 function Config.RewardCash(incomePerSecond: number): number
@@ -282,10 +329,11 @@ function Config.RollRarity(zone: number, rng: Random): number
 	return 1
 end
 
-function Config.WalkSpeed(speedLevel: number, training: number, trail: number, treadLevel: number): number
+function Config.WalkSpeed(speedLevel: number, training: number, trail: number, treadLevel: number, bonus: number?): number
 	local base = Config.BaseWalkSpeed + speedLevel * Config.SpeedPerLevel
 		+ math.min(training, Config.TrainingCap) / Config.TrainingDivisor
 		+ (math.max(treadLevel, 1) - 1) * Config.TreadSpeedPerLevel
+		+ (bonus or 0)
 	local multiplier = if trail > 0 then Config.Trails[trail].Multiplier else 1
 	return base * multiplier
 end

@@ -131,6 +131,120 @@ local function lamp(parent: Instance, position: Vector3, color: Color3)
 	Style.Light(bulb, color, 1.2, 16)
 end
 
+-- Base props: treadmill upgrade board, sell stall, fuse machine ------------------------
+
+local function uiText(parent: Instance, name: string, text: string, color: Color3, size: UDim2, position: UDim2): TextLabel
+	local label = Instance.new("TextLabel")
+	label.Name = name
+	label.BackgroundTransparency = 1
+	label.Size = size
+	label.Position = position
+	label.Font = Style.Font
+	label.TextScaled = true
+	label.Text = text
+	label.TextColor3 = color
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Color = Style.Ink
+	stroke.Parent = label
+	label.Parent = parent
+	return label
+end
+
+local function uiButton(parent: Instance, name: string, color: Color3, size: UDim2, position: UDim2, text: string): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = name
+	b.Text = ""
+	b.BackgroundColor3 = color
+	b.Size = size
+	b.Position = position
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = b
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 4
+	stroke.Color = Style.Ink
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = b
+	uiText(b, "Label", text, Style.White, UDim2.fromScale(0.9, 0.76), UDim2.fromScale(0.05, 0.12))
+	b.Parent = parent
+	return b
+end
+
+-- Black "Upgrade  Level 1 > Level 2  [$ cash] [R$]" board beside the treadmill. The server fills in the
+-- owner's numbers; the owner's client wires the two buttons.
+local function upgradeBoard(base: Model, at: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "UpgradeBoard"
+	P(m, "Post", Vector3.new(1.2, 3.6, 1.2), at * CFrame.new(0, 1.8, 0.4), Color3.fromRGB(26, 26, 34))
+	local board = P(m, "Board", Vector3.new(7.6, 4.8, 0.6), at * CFrame.new(0, 5.8, 0), Color3.fromRGB(14, 14, 20))
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Screen"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0
+	gui.Parent = board
+	uiText(gui, "Title", "Upgrade", Style.White, UDim2.fromScale(0.9, 0.24), UDim2.fromScale(0.05, 0.05))
+	uiText(gui, "Levels", "Level 1 > Level 2", Color3.fromRGB(110, 255, 90), UDim2.fromScale(0.9, 0.2), UDim2.fromScale(0.05, 0.31))
+	uiButton(gui, "CashButton", Color3.fromRGB(230, 40, 50), UDim2.fromScale(0.56, 0.33), UDim2.fromScale(0.04, 0.6), "$0")
+	uiButton(gui, "RobuxButton", Color3.fromRGB(165, 55, 225), UDim2.fromScale(0.34, 0.33), UDim2.fromScale(0.62, 0.6), "R$ 0")
+	m.PrimaryPart = board
+	m.Parent = base
+end
+
+local function sellStall(base: Model, at: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "SellStall"
+	for _, x in { -2.7, 2.7 } do
+		for _, z in { -1.4, 1.4 } do
+			P(m, "Post", Vector3.new(0.5, 7, 0.5), at * CFrame.new(x, 3.5, z), Color3.fromRGB(86, 86, 104))
+		end
+	end
+	local counter = P(m, "Counter", Vector3.new(6, 2.6, 1.3), at * CFrame.new(0, 1.3, -1.1), WOOD)
+	Style.Studs(counter)
+	P(m, "CounterTop", Vector3.new(6.4, 0.3, 1.7), at * CFrame.new(0, 2.75, -1.1), WOOD_LIGHT)
+	for n = 0, 7 do
+		local color = if n % 2 == 0 then Color3.fromRGB(230, 40, 50) else Color3.new(1, 1, 1)
+		P(m, "Awning", Vector3.new(0.78, 0.3, 3.9), at * CFrame.new(-2.73 + n * 0.78, 7.2, -0.2) * CFrame.Angles(0.22, 0, 0), color)
+	end
+	local label = Style.Label(counter, "SELL", Color3.fromRGB(255, 60, 70), 7, 2.6, 7.6)
+	label.Name = "SellLabel"
+	label.MaxDistance = 90
+	m.PrimaryPart = counter
+	m.Parent = base
+end
+
+local function fuseMachine(base: Model, at: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "FuseMachine"
+	local plate = P(m, "Plate", Vector3.new(5.2, 0.6, 4.6), at * CFrame.new(0, 0.3, 0), Color3.fromRGB(150, 156, 170))
+	Style.Studs(plate)
+	local body = P(m, "Body", Vector3.new(4.2, 4, 3.6), at * CFrame.new(0, 2.6, 0.2), Color3.fromRGB(40, 110, 230))
+	Style.Studs(body, true)
+	for n = -1, 1 do
+		Style.Cylinder(m, "Funnel", 1.4, 1, at * CFrame.new(n * 1.3, 5.3, 0.6), Color3.fromRGB(70, 74, 92))
+		Style.Cylinder(m, "FunnelTop", 0.4, 1.5, at * CFrame.new(n * 1.3, 6.1, 0.6), Color3.fromRGB(50, 52, 66))
+	end
+	local door = P(m, "Door", Vector3.new(2.2, 2.6, 0.2), at * CFrame.new(0.4, 2.3, -1.65), Color3.new(1, 1, 1), Enum.Material.Neon)
+	Style.Light(door, Color3.fromRGB(200, 230, 255), 1, 10)
+	local screen = P(m, "Screen", Vector3.new(1.4, 0.8, 0.2), at * CFrame.new(-1.45, 3.5, -1.65), Color3.fromRGB(20, 20, 28))
+	for n = -1, 1 do
+		noCollide(P(m, "Heart", Vector3.new(0.3, 0.3, 0.1), screen.CFrame * CFrame.new(n * 0.4, 0, -0.12), Color3.fromRGB(255, 50, 70), Enum.Material.Neon))
+	end
+	P(m, "Button", Vector3.new(0.7, 0.3, 0.7), at * CFrame.new(-1.45, 2.4, -1.85), Color3.fromRGB(230, 40, 50))
+	P(m, "Lever", Vector3.new(0.25, 2.4, 0.25), at * CFrame.new(-2.3, 5.2, 1) * CFrame.Angles(0, 0, 0.25), Color3.fromRGB(60, 62, 80))
+	P(m, "LeverKnob", Vector3.new(0.7, 0.7, 0.7), at * CFrame.new(-2.6, 6.4, 1), Color3.fromRGB(40, 40, 52), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	local title = Style.Label(body, "Fuse Machine", Color3.fromRGB(90, 200, 255), 7, 1.5, 6)
+	title.Name = "Title"
+	title.MaxDistance = 90
+	local count = Style.Label(body, "0/" .. Config.FuseCount, Color3.new(1, 1, 1), 3.5, 1.3, 4.6)
+	count.Name = "Count"
+	count.MaxDistance = 90
+	m.PrimaryPart = body
+	m.Parent = base
+end
+
 -- Personal treadmills -------------------------------------------------------------------
 -- Every level has its own colours; features stack up as the level rises.
 
@@ -173,6 +287,9 @@ function W.BuildTreadmill(base: Model, index: number, level: number): Model
 	if sub then
 		sub.Name = "Info"
 	end
+	local step = Style.Label(console, "", Color3.fromRGB(255, 255, 255), 6, 1.5, 4.6)
+	step.Name = "StepLabel"
+	step.MaxDistance = 80
 
 	if level >= 3 then
 		for _, x in { -5.6, 5.6 } do
@@ -310,7 +427,16 @@ local function buildBase(parent: Instance, index: number)
 	Style.Studs(banner, true)
 	Style.Sign(banner, tostring(index), nil, Color3.new(1, 1, 1), if side < 0 then Enum.NormalId.Right else Enum.NormalId.Left, 20)
 	planter(base, CFrame.new(local3(-15.5, 0.6, -10)), 9, rng)
-	lamp(base, local3(-16.5, 0.6, 2), Style.Lighten(color, 0.4))
+	lamp(base, local3(-16.5, 0.6, -16), Style.Lighten(color, 0.4))
+
+	-- Upgrade board faces the treadmill; the stall and fuse machine face the spawn pad.
+	local inward = Vector3.new(side, 0, 0)
+	local boardAt = local3(-15.4, 0.6, -0.5)
+	upgradeBoard(base, CFrame.lookAt(boardAt, boardAt + inward))
+	local stallAt = local3(-12, 0.6, 15.2)
+	sellStall(base, CFrame.lookAt(stallAt, stallAt - Vector3.new(0, 0, 1)))
+	local fuseAt = local3(-2.4, 0.6, 12.4)
+	fuseMachine(base, CFrame.lookAt(fuseAt, fuseAt - inward))
 
 	W.BuildTreadmill(base, index, 1)
 	base.PrimaryPart = floor
